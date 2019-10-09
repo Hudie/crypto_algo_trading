@@ -2,11 +2,8 @@
 
 # from utility.enum import enum
 from tornado.platform.asyncio import AsyncIOMainLoop
-from service.base import ServiceState, ServiceBase
-import logging
+from service.base import ServiceState, ServiceBase, start_service
 import zmq.asyncio
-import asyncio
-import tornado
 import json
 
 
@@ -19,7 +16,7 @@ class DeribitMDConsumer(ServiceBase):
         # servie id used for control
         self.sid = 'sid002'
         
-        # SUB data
+        # subscribe data from deribitmd PUB server
         self.msgclient = self.ctx.socket(zmq.SUB)
         self.msgclient.connect('tcp://localhost:9000')
         self.msgclient.setsockopt_string(zmq.SUBSCRIBE, '')
@@ -27,13 +24,13 @@ class DeribitMDConsumer(ServiceBase):
     async def sub_msg(self):
         while self.state == ServiceState.started:
             msg = await self.msgclient.recv_string()
+            # deal with the coming msg
             print(msg)
 
     async def run(self):
         if self.state == ServiceState.started:
             self.logger.error('tried to run service, but state is %s' % self.state)
         else:
-            print('Here in run body')
             self.state = ServiceState.started
             await self.sub_msg()
 
@@ -41,10 +38,4 @@ class DeribitMDConsumer(ServiceBase):
     
 if __name__ == '__main__':
     service = DeribitMDConsumer('mdconsumer')
-
-    AsyncIOMainLoop().install()
-    loop = tornado.ioloop.IOLoop.current()
-    loop.spawn_callback(service.start)
-    loop.spawn_callback(service.on_control_msg)
-    loop.spawn_callback(service.heartbeat, {})
-    loop.start()
+    start_service(service, {})

@@ -1,11 +1,8 @@
 # -*- coding: utf-8 -*-
 
 from tornado.platform.asyncio import AsyncIOMainLoop
-from service.base import ServiceState, ServiceBase
-import logging
+from service.base import ServiceState, ServiceBase, start_service
 import zmq.asyncio
-import asyncio
-import tornado
 import websockets
 import json
 
@@ -52,7 +49,7 @@ class DeribitMD(ServiceBase):
         ServiceBase.__init__(self, logger_name)
 
         self.sid = 'sid001'
-        # PUB data
+        # zmq PUB socket for publishing market data
         self.pubserver = self.ctx.socket(zmq.PUB)
         self.pubserver.bind('tcp://*:9000')
 
@@ -79,6 +76,7 @@ class DeribitMD(ServiceBase):
                             }))
                     else:
                         print(response)
+                        # send data to subscribers
                         self.pubserver.send_string(json.dumps(response))
                 else:
                     pass
@@ -96,10 +94,4 @@ class DeribitMD(ServiceBase):
     
 if __name__ == '__main__':
     service = DeribitMD('deribitmd')
-
-    AsyncIOMainLoop().install()
-    loop = tornado.ioloop.IOLoop.current()
-    loop.spawn_callback(service.start)
-    loop.spawn_callback(service.on_control_msg)
-    loop.spawn_callback(service.heartbeat, {'port': 9000, 'ip': 'localhost'})
-    loop.start()
+    start_service(service, {'port': 9000, 'ip': 'localhost'})

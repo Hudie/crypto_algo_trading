@@ -1,21 +1,25 @@
 from tornado.platform.asyncio import AsyncIOMainLoop
 from tornado import web
 import tornado
-import asyncio
 import zmq.asyncio
 import json
 
 
 
+
 ctx = zmq.asyncio.Context()
+# zmq response server for listening heartbeats from all services
 repserver = ctx.socket(zmq.REP)
 repserver.bind('tcp://*:8810')
+# zmq pub server for broadcasting messages to all subscribed services
 pubserver = ctx.socket(zmq.PUB)
 pubserver.bind('tcp://*:8820')
-
+# record status of all services
 service_node_status = {}
 
 
+# handler to deal with heartbeat requests, 
+# which will be added to tornado event loop and never stop
 async def on_request():
     try:
         while True:
@@ -38,8 +42,11 @@ application = web.Application([
 
 
 if __name__ == "__main__":
-    AsyncIOMainLoop().install()
+    # provide http server at port 8888
     application.listen(8888)
+
+    # start tornado main event loop
+    AsyncIOMainLoop().install()
     loop = tornado.ioloop.IOLoop.current()
     loop.spawn_callback(on_request)
     loop.start()

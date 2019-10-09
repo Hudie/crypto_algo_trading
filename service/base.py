@@ -26,12 +26,14 @@ class ServiceBase(object):
         self.logger = logging.getLogger(logger_name)
         self._set_state(ServiceState.init)
 
-        self.sid = ''
+        # service id, and all services should have different sid
+        self.sid = 'servicebase'
+
         self.ctx = zmq.asyncio.Context()
-        # REQ client bound to monitor
+        # REQ client connected to monitor for heartbeating
         self.reqclient = self.ctx.socket(zmq.REQ)
         self.reqclient.connect('tcp://localhost:8810')
-        # SUB data from monitor
+        # SUB client for subscribing messages from monitor
         self.subclient = self.ctx.socket(zmq.SUB)
         self.subclient.connect('tcp://localhost:8820')
         self.subclient.setsockopt_string(zmq.SUBSCRIBE, '')
@@ -54,14 +56,17 @@ class ServiceBase(object):
         self.logger.info('service stopped')   
     
     def status(self):
-        return self.state
+        return self.state.value
 
+    # for PUB services to publish messages to zmq PUB socket
     async def pub_msg(self):
         pass
 
+    # for SUB services to consume messages from subscribed zmq PUBs
     async def sub_msg(self):
         pass
 
+    # listening from monitor PUB socket for remote control
     async def on_control_msg(self):
         while True:
             msg = json.loads(await self.subclient.recv_string())
@@ -71,6 +76,7 @@ class ServiceBase(object):
                 elif msg['action'] == 'start':
                     await self.run()
 
+    # heartbeat, used to periodically update service status
     async def heartbeat(self, infos):
         while True:
             infos.update({'sid': self.sid, 'type': 'heartbeat', 'state': self.state.value})
@@ -83,17 +89,19 @@ class ServiceBase(object):
             self.logger.error('tried to run service, but state is %s' % self.state)
         else:
             self.state = ServiceState.started
+            # do nothing here in base class
             # await self.pub_msg()
             # await self.sub_msg()
 
-
-
-if __name__ == '__main__':
-    service = ServiceBase('servicebase')
-
+def start_service(service, infos):
     AsyncIOMainLoop().install()
     loop = tornado.ioloop.IOLoop.current()
     loop.spawn_callback(service.start)
     loop.spawn_callback(service.on_control_msg)
-    loop.spawn_callback(service.heartbeat)
+    loop.spawn_callback(service.heartbeat, infos)
     loop.start()
+
+
+if __name__ == '__main__':
+    service = ServiceBase('servicebase')
+    start_service(service, {})
