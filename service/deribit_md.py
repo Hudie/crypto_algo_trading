@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 
 from tornado.platform.asyncio import AsyncIOMainLoop
+from crypto_foundation.api.deribit_parser import parse_deribit_trade, parse_deribit_quote, parse_deribit_order_book
 from base import ServiceState, ServiceBase, start_service
 import zmq.asyncio
 import websockets
 import json
+import pickle
 
 
 
@@ -87,7 +89,7 @@ class DeribitMD(ServiceBase):
                         channels['params']['channels'].append('.'.join([j, i['instrument_name'], 'raw']))
                 await websocket.send(json.dumps(channels))
 
-                # it is very very important here to use 'self.state' to control start/stop
+                # it is very important here to use 'self.state' to control start/stop!!!
                 while websocket.open and self.state == ServiceState.started:
                     response = json.loads(await websocket.recv())
                     # need response heartbeat to keep alive
@@ -97,9 +99,21 @@ class DeribitMD(ServiceBase):
                     elif response.get('id', '') in (8212, 3600):
                         pass
                     else:
-                        print(response)
-                        # send data to zmq
-                        self.pubserver.send_string(json.dumps(response))
+                        if response['params']['channel'].startswith('trades'):
+                            for i in response['params']['data']:
+                                # print(parse_deribit_trade(i))
+                                self.pubserver.send_string(json.dumps({'type': 'trade',
+                                                                       'data': str(pickle.dumps(parse_deribit_trade(i)))}))
+                        elif response['params']['channel'].startswith('ticker'):
+                            self.pubserver.send_string(
+                                json.dumps({'type': 'quote',
+                                            'data': str(pickle.dumps(parse_deribit_quote(response['params']['data'])))}))
+                        elif response['params']['channel'].startswith('book'):
+                            self.pubserver.send_string(
+                                json.dumps({'type': 'book',
+                                            'data': str(pickle.dumps(parse_deribit_order_book(response['params']['data'])))}))
+                        else:
+                            pass
                 else:
                     pass
         except websockets.exceptions.ConnectionClosedError:

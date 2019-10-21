@@ -2,10 +2,13 @@
 
 # from utility.enum import enum
 from tornado.platform.asyncio import AsyncIOMainLoop
-from service.base import ServiceState, ServiceBase, start_service
+from base import ServiceState, ServiceBase, start_service
+from crypto_foundation.kdb.kdb_connection import KDBConn
+from crypto_foundation.kdb.kdb_table_def import crypto_quotes, crypto_trades, crypto_instruments, deribit_order_books
 import zmq.asyncio
 import asyncio
 import json
+import pickle
 
 
 
@@ -25,13 +28,22 @@ class DeribitMDConsumer(ServiceBase):
         self.msgclient2 = self.ctx.socket(zmq.SUB)
         self.msgclient2.connect('tcp://localhost:9001')
         self.msgclient2.setsockopt_string(zmq.SUBSCRIBE, '')
+
+        host     = "34.220.176.26"
+        port     = 6004
+        self.kdb_conn = KDBConn(host, port, 'tickerplant', 'pass')
+        self.kdb_conn.open()
         
     # deal with data source 1
     async def sub_msg(self):
+        type_dict = {'quote': crypto_quotes, 'trade': crypto_trades, 'book': deribit_order_books}
         while self.state == ServiceState.started:
-            msg = await self.msgclient.recv_string()
+            msg = json.loads(await self.msgclient.recv_string())
             # deal with the coming msg
-            print(msg)
+            if self.kdb_conn.is_connected():
+                # print(pickle.loads(eval(msg['data'])))
+                self.kdb_conn.pub(type_dict[msg['type']],
+                                  [pickle.loads(eval(msg['data']))], is_tickerplant = True)
 
     # deal with data source 2
     async def sub_msg2(self):
