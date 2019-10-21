@@ -41,9 +41,12 @@ class DeribitMDConsumer(ServiceBase):
             msg = json.loads(await self.msgclient.recv_string())
             # deal with the coming msg
             if self.kdb_conn.is_connected():
-                # print(pickle.loads(eval(msg['data'])))
+                print(pickle.loads(eval(msg['data'])))
                 self.kdb_conn.pub(type_dict[msg['type']],
                                   [pickle.loads(eval(msg['data']))], is_tickerplant = True)
+            else:
+                self.kdb_conn.close()
+                self.kdb_conn.open()
 
     # deal with data source 2
     async def sub_msg2(self):

@@ -99,6 +99,7 @@ class DeribitMD(ServiceBase):
                     elif response.get('id', '') in (8212, 3600):
                         pass
                     else:
+                        print(response['params']['data'])
                         if response['params']['channel'].startswith('trades'):
                             for i in response['params']['data']:
                                 # print(parse_deribit_trade(i))
@@ -116,7 +117,9 @@ class DeribitMD(ServiceBase):
                             pass
                 else:
                     pass
-        except websockets.exceptions.ConnectionClosedError:
+        # except websockets.exceptions.ConnectionClosedError as e:
+        except Exception as e:
+            print(e)
             await self.pub_msg()
 
     async def run(self):
