@@ -94,7 +94,7 @@ class DeribitMD(ServiceBase):
                 # set heartbeats to keep alive
                 await websocket.send(json.dumps(heartbeat))
                 await websocket.recv()
-                # update instruments and then update channels
+                # get instruments and then update channels
                 await websocket.send(json.dumps(instruments))
                 response = json.loads(await websocket.recv())
                 for i in response['result']:
@@ -106,14 +106,12 @@ class DeribitMD(ServiceBase):
 
                 # it is very important here to use 'self.state' to control start/stop!!!
                 while websocket.open and self.state == ServiceState.started:
-                    # update instruments
-                    if time.gmtime().tm_min % 2 == 1 and hourlyupdated == False:
+                    # update instruments every hour
+                    if time.gmtime().tm_min == 5 and hourlyupdated == False:
                         await websocket.send(json.dumps(instruments))
                         hourlyupdated = True
-                        print('+++++ set hourlyupdated true')
-                    elif time.gmtime().tm_min % 2 == 0 and hourlyupdated == True:
+                    elif time.gmtime().tm_min == 31 and hourlyupdated == True:
                         hourlyupdated = False
-                        print('+++++ set hourlyupdated false')
                     else:
                         pass
                     
@@ -123,12 +121,11 @@ class DeribitMD(ServiceBase):
                         if response['params']['type'] == 'test_request':
                             await websocket.send(json.dumps(test))
                     elif response.get('id', '') == 7617:
-                        print('==========================')
                         newchannels = set()
                         for i in response['result']:
                             newchannels.add('.'.join([j, i['instrument_name'], 'raw']))
                         print(newchannels)
-                        if len(newchannels.difference(activechannels)) == 0:
+                        if len(newchannels.difference(activechannels)) > 0:
                             subscribe['params']['channels'] = list(newchannels)
                             await websocket.send(json.dumps(subscribe))
                             unsubscribe['params']['channels'] = list(activechannels.difference(newchannels))
@@ -137,10 +134,9 @@ class DeribitMD(ServiceBase):
                     elif response.get('id', '') in (8212, 8691, 3600):
                         pass
                     else:
-                        # print(response['params']['data'])
+                        print(response['params']['data'])
                         if response['params']['channel'].startswith('trades'):
                             for i in response['params']['data']:
-                                # print(parse_deribit_trade(i))
                                 self.pubserver.send_string(json.dumps({'type': 'trade',
                                                                        'data': str(pickle.dumps(parse_deribit_trade(i)))}))
                         elif response['params']['channel'].startswith('ticker'):
