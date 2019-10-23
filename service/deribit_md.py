@@ -109,20 +109,6 @@ class DeribitMD(ServiceBase):
                     # update instruments
                     if time.gmtime().tm_min % 2 == 1 and hourlyupdated == False:
                         await websocket.send(json.dumps(instruments))
-                        '''
-                        response = json.loads(await websocket.recv())
-                        print(response)
-                        newchannels = set()
-                        for i in response['result']:
-                            newchannels.add('.'.join([j, i['instrument_name'], 'raw']))
-                        if len(newchannels.difference(activechannels)) > 0:
-                            subscribe['params']['channels'] = list(newchannels)
-                            await websocket.send(json.dumps(subscribe))
-                            await websocket.recv()
-                            unsubscribe['params']['channels'] = list(activechannels.difference(newchannels))
-                            await websocket.send(json.dumps(unsubscribe))
-                            # await websocket.recv()
-                        '''
                         hourlyupdated = True
                         print('+++++ set hourlyupdated true')
                     elif time.gmtime().tm_min % 2 == 0 and hourlyupdated == True:
@@ -138,15 +124,15 @@ class DeribitMD(ServiceBase):
                             await websocket.send(json.dumps(test))
                     elif response.get('id', '') == 7617:
                         print('==========================')
-                        print(response['result'])
                         newchannels = set()
                         for i in response['result']:
                             newchannels.add('.'.join([j, i['instrument_name'], 'raw']))
-                        if len(newchannels.difference(activechannels)) > 0:
+                        print(newchannels)
+                        if len(newchannels.difference(activechannels)) == 0:
                             subscribe['params']['channels'] = list(newchannels)
                             await websocket.send(json.dumps(subscribe))
-                            #unsubscribe['params']['channels'] = list(activechannels.difference(newchannels))
-                            #await websocket.send(json.dumps(unsubscribe))
+                            unsubscribe['params']['channels'] = list(activechannels.difference(newchannels))
+                            await websocket.send(json.dumps(unsubscribe))
                             activechannels = newchannels
                     elif response.get('id', '') in (8212, 8691, 3600):
                         pass
