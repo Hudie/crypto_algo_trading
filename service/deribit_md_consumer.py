@@ -36,7 +36,8 @@ class DeribitMDConsumer(ServiceBase):
         
     # deal with data source 1
     async def sub_msg(self):
-        type_dict = {'quote': crypto_quotes, 'trade': crypto_trades, 'book': deribit_order_books}
+        type_dict = {'quote': crypto_quotes, 'trade': crypto_trades,
+                     'book': deribit_order_books, 'instrument': crypto_instruments}
         while self.state == ServiceState.started:
             msg = json.loads(await self.msgclient.recv_string())
             # deal with the coming msg
