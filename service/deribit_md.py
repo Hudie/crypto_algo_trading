@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from tornado.platform.asyncio import AsyncIOMainLoop
-from crypto_foundation.api.deribit_parser import parse_deribit_trade, parse_deribit_quote, parse_deribit_order_book
+from crypto_foundation.api.deribit_parser import parse_deribit_trade, parse_deribit_quote, parse_deribit_order_book, parse_deribit_instrument
 from base import ServiceState, ServiceBase, start_service
 import zmq.asyncio
 import websockets
@@ -130,6 +130,13 @@ class DeribitMD(ServiceBase):
                             await websocket.send(json.dumps(subscribe))
                             unsubscribe['params']['channels'] = list(activechannels.difference(newchannels))
                             await websocket.send(json.dumps(unsubscribe))
+                            newinstruments = set()
+                            for i in newchannels.difference(activechannels):
+                                newinstruments.add(i.split('.')[1])
+                            for i in response['result']:
+                                if i['instrument_name'] in newinstruments:
+                                    self.pubserver.send_string(json.dumps({'type': 'instrument',
+                                                                           'data': str(pickle.dumps(parse_deribit_instrument(i)))}))
                             activechannels = newchannels
                     elif response.get('id', '') in (8212, 8691, 3600):
                         pass
