@@ -98,6 +98,8 @@ class DeribitMD(ServiceBase):
                 await websocket.send(json.dumps(instruments))
                 response = json.loads(await websocket.recv())
                 for i in response['result']:
+                    self.pubserver.send_string(json.dumps({'type': 'instrument',
+                                                           'data': str(pickle.dumps(parse_deribit_instrument(i)))}))
                     for j in ('trades', 'ticker', 'book'):
                         activechannels.add('.'.join([j, i['instrument_name'], 'raw']))
                 subscribe['params']['channels'] = list(activechannels)
