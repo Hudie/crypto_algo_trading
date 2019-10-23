@@ -7,10 +7,13 @@ import zmq.asyncio
 import websockets
 import json
 import pickle
+import time
 
 
 
 symbol = 'BTC'
+activechannels = set()
+hourlyupdated = False
 
 auth = {
     "jsonrpc" : "2.0",
@@ -23,7 +26,7 @@ auth = {
     }
 }
 
-channels = {
+subscribe = {
     "jsonrpc" : "2.0",
     "id" : 3600,
     "method" : "public/subscribe",
@@ -33,6 +36,15 @@ channels = {
             #"ticker.BTC-11OCT19-9500-C.raw",
             #"ticker.BTC-11OCT19-9750-C.raw",
         ]
+    }
+}
+
+unsubscribe = {
+    "jsonrpc" : "2.0",
+    "id" : 8691,
+    "method" : "public/unsubscribe",
+    "params" : {
+        "channels" : []
     }
 }
 
@@ -78,6 +90,7 @@ class DeribitMD(ServiceBase):
         # get marketdata from exchange socket, then pub to zmq
         try:
             async with websockets.connect('wss://www.deribit.com/ws/api/v2') as websocket:
+                global activechannels, hourlyupdated
                 # set heartbeats to keep alive
                 await websocket.send(json.dumps(heartbeat))
                 await websocket.recv()
@@ -86,20 +99,59 @@ class DeribitMD(ServiceBase):
                 response = json.loads(await websocket.recv())
                 for i in response['result']:
                     for j in ('trades', 'ticker', 'book'):
-                        channels['params']['channels'].append('.'.join([j, i['instrument_name'], 'raw']))
-                await websocket.send(json.dumps(channels))
+                        activechannels.add('.'.join([j, i['instrument_name'], 'raw']))
+                subscribe['params']['channels'] = list(activechannels)
+                await websocket.send(json.dumps(subscribe))
+                hourlyupdated = True
 
                 # it is very important here to use 'self.state' to control start/stop!!!
                 while websocket.open and self.state == ServiceState.started:
+                    # update instruments
+                    if time.gmtime().tm_min % 2 == 1 and hourlyupdated == False:
+                        await websocket.send(json.dumps(instruments))
+                        '''
+                        response = json.loads(await websocket.recv())
+                        print(response)
+                        newchannels = set()
+                        for i in response['result']:
+                            newchannels.add('.'.join([j, i['instrument_name'], 'raw']))
+                        if len(newchannels.difference(activechannels)) > 0:
+                            subscribe['params']['channels'] = list(newchannels)
+                            await websocket.send(json.dumps(subscribe))
+                            await websocket.recv()
+                            unsubscribe['params']['channels'] = list(activechannels.difference(newchannels))
+                            await websocket.send(json.dumps(unsubscribe))
+                            # await websocket.recv()
+                        '''
+                        hourlyupdated = True
+                        print('+++++ set hourlyupdated true')
+                    elif time.gmtime().tm_min % 2 == 0 and hourlyupdated == True:
+                        hourlyupdated = False
+                        print('+++++ set hourlyupdated false')
+                    else:
+                        pass
+                    
                     response = json.loads(await websocket.recv())
                     # need response heartbeat to keep alive
                     if response.get('method', '') == 'heartbeat':
                         if response['params']['type'] == 'test_request':
                             await websocket.send(json.dumps(test))
-                    elif response.get('id', '') in (8212, 3600):
+                    elif response.get('id', '') == 7617:
+                        print('==========================')
+                        print(response['result'])
+                        newchannels = set()
+                        for i in response['result']:
+                            newchannels.add('.'.join([j, i['instrument_name'], 'raw']))
+                        if len(newchannels.difference(activechannels)) > 0:
+                            subscribe['params']['channels'] = list(newchannels)
+                            await websocket.send(json.dumps(subscribe))
+                            #unsubscribe['params']['channels'] = list(activechannels.difference(newchannels))
+                            #await websocket.send(json.dumps(unsubscribe))
+                            activechannels = newchannels
+                    elif response.get('id', '') in (8212, 8691, 3600):
                         pass
                     else:
-                        print(response['params']['data'])
+                        # print(response['params']['data'])
                         if response['params']['channel'].startswith('trades'):
                             for i in response['params']['data']:
                                 # print(parse_deribit_trade(i))
