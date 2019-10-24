@@ -107,7 +107,12 @@ class DeribitMD(ServiceBase):
                 hourlyupdated = True
 
                 # it is very important here to use 'self.state' to control start/stop!!!
+                lastheartbeat = time.time()
                 while websocket.open and self.state == ServiceState.started:
+                    # check heartbeat to see if websocket is broken
+                    if time.time() - lastheartbeat > 15:
+                        raise websockets.exceptions.ConnectionClosedError(1003, 'Serverside heartbeat stopped.')
+                    
                     # update instruments every hour
                     if time.gmtime().tm_min == 5 and hourlyupdated == False:
                         await websocket.send(json.dumps(instruments))
@@ -120,7 +125,9 @@ class DeribitMD(ServiceBase):
                     response = json.loads(await websocket.recv())
                     # need response heartbeat to keep alive
                     if response.get('method', '') == 'heartbeat':
+                        # print(response)
                         if response['params']['type'] == 'test_request':
+                            lastheartbeat = time.time()
                             await websocket.send(json.dumps(test))
                     elif response.get('id', '') == 7617:
                         newchannels = set()
