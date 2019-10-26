@@ -15,6 +15,7 @@ symbol = 'BTC'
 activechannels = set()
 hourlyupdated = False
 
+AUTH_MSG_ID = 9929
 auth = {
     "jsonrpc" : "2.0",
     "id" : 9929,
@@ -166,8 +167,8 @@ class DeribitMD(ServiceBase):
                         else:
                             pass
                 else:
-                    pass
-        # except websockets.exceptions.ConnectionClosedError as e:
+                    if self.state == ServiceState.started:
+                        await self.pub_msg()
         except Exception as e:
             print(e)
             await self.pub_msg()
