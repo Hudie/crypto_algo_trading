@@ -22,7 +22,7 @@ class DeribitMDConsumer(ServiceBase):
         
         # subscribe data from deribitmd PUB server
         self.msgclient = self.ctx.socket(zmq.SUB)
-        self.msgclient.connect('tcp://localhost:9000')
+        self.msgclient.connect('tcp://localhost:30001')
         self.msgclient.setsockopt_string(zmq.SUBSCRIBE, '')
 
         self.msgclient2 = self.ctx.socket(zmq.SUB)
