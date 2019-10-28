@@ -18,11 +18,11 @@ KDB_PORT = sys.argv[2]
 
 class DeribitMDConsumer(ServiceBase):
     
-    def __init__(self, logger_name):
+    def __init__(self, sid, logger_name):
         ServiceBase.__init__(self, logger_name)
 
         # servie id used for control
-        self.sid = 'sid002'
+        self.sid = sid
         
         # subscribe data from deribitmd PUB server
         self.msgclient = self.ctx.socket(zmq.SUB)
@@ -70,5 +70,5 @@ class DeribitMDConsumer(ServiceBase):
 
     
 if __name__ == '__main__':
-    service = DeribitMDConsumer('mdconsumer')
+    service = DeribitMDConsumer('deribit-md-to-kdb', 'deribit-md-to-kdb')
     start_service(service, {})
