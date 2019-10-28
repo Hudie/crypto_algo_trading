@@ -9,8 +9,12 @@ import zmq.asyncio
 import asyncio
 import json
 import pickle
+import sys
 
 
+
+KDB_HOST = sys.argv[1]
+KDB_PORT = sys.argv[2]
 
 class DeribitMDConsumer(ServiceBase):
     
@@ -22,27 +26,26 @@ class DeribitMDConsumer(ServiceBase):
         
         # subscribe data from deribitmd PUB server
         self.msgclient = self.ctx.socket(zmq.SUB)
-        self.msgclient.connect('tcp://localhost:30001')
+        self.msgclient.connect('tcp://localhost:9000')
         self.msgclient.setsockopt_string(zmq.SUBSCRIBE, '')
 
         self.msgclient2 = self.ctx.socket(zmq.SUB)
         self.msgclient2.connect('tcp://localhost:9001')
         self.msgclient2.setsockopt_string(zmq.SUBSCRIBE, '')
 
-        host     = "34.220.176.26"
-        port     = 6004
-        self.kdb_conn = KDBConn(host, port, 'tickerplant', 'pass')
+        self.kdb_conn = KDBConn(KDB_HOST, int(KDB_PORT), 'tickerplant', 'pass')
         self.kdb_conn.open()
         
     # deal with data source 1
     async def sub_msg(self):
         type_dict = {'quote': crypto_quotes, 'trade': crypto_trades,
                      'book': deribit_order_books, 'instrument': crypto_instruments}
+        print('Begin message consuming')
         while self.state == ServiceState.started:
             msg = json.loads(await self.msgclient.recv_string())
             # deal with the coming msg
             if self.kdb_conn.is_connected():
-                print(pickle.loads(eval(msg['data'])))
+                # print(pickle.loads(eval(msg['data'])))
                 self.kdb_conn.pub(type_dict[msg['type']],
                                   [pickle.loads(eval(msg['data']))], is_tickerplant = True)
             else:
