@@ -134,7 +134,8 @@ class DeribitMD(ServiceBase):
                     elif response.get('id', '') == 7617:
                         newchannels = set()
                         for i in response['result']:
-                            newchannels.add('.'.join([j, i['instrument_name'], 'raw']))
+                            for j in ('trades', 'ticker', 'book'):
+                                newchannels.add('.'.join([j, i['instrument_name'], 'raw']))
                         print(newchannels)
                         if len(newchannels.difference(activechannels)) > 0:
                             subscribe['params']['channels'] = list(newchannels)
