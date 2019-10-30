@@ -153,7 +153,7 @@ class DeribitMD(ServiceBase):
                     elif response.get('id', '') in (8212, 8691, 3600):
                         pass
                     else:
-                        # print(response['params']['data'])
+                        print(response['params']['data'])
                         if response['params']['channel'].startswith('trades'):
                             for i in response['params']['data']:
                                 self.pubserver.send_string(json.dumps({'type': 'trade',

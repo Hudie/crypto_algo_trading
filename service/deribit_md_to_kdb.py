@@ -45,7 +45,7 @@ class DeribitMDConsumer(ServiceBase):
             msg = json.loads(await self.msgclient.recv_string())
             # deal with the coming msg
             if self.kdb_conn.is_connected():
-                # print(pickle.loads(eval(msg['data'])))
+                print(pickle.loads(eval(msg['data'])))
                 self.kdb_conn.pub(type_dict[msg['type']],
                                   [pickle.loads(eval(msg['data']))], is_tickerplant = True)
             else:
