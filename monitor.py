@@ -3,9 +3,16 @@ from tornado import web
 import tornado
 import zmq.asyncio
 import json
+import logging
 
 
 
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+fh = logging.FileHandler('monitor.log', mode='a')
+formatter = logging.Formatter("%(asctime)s - %(levelname)s: %(message)s")
+fh.setFormatter(formatter)
+logger.addHandler(fh)
 
 ctx = zmq.asyncio.Context()
 # zmq response server for listening heartbeats from all services
@@ -26,9 +33,9 @@ async def on_request():
            msg = json.loads(await repserver.recv_string())
            await repserver.send_string('copy')
            service_node_status[msg['sid']] = msg
-           print(service_node_status)
+           logger.info(str(service_node_status))
     except Exception as e:
-        print(e)
+        logger.error(e)
 
 class ControlHandler(tornado.web.RequestHandler):
     async def post(self):
