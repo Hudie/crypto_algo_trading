@@ -10,16 +10,8 @@ import asyncio
 import json
 import pickle
 import sys
-import logging
 
 
-
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-fh = logging.FileHandler('deribit_md_to_kdb.log', mode='a')
-formatter = logging.Formatter("%(asctime)s - %(levelname)s: %(message)s")
-fh.setFormatter(formatter)
-logger.addHandler(fh)
 
 KDB_HOST = sys.argv[1]
 KDB_PORT = sys.argv[2]
@@ -48,12 +40,12 @@ class DeribitMDConsumer(ServiceBase):
     async def sub_msg(self):
         type_dict = {'quote': crypto_quotes, 'trade': crypto_trades,
                      'book': deribit_order_books, 'instrument': crypto_instruments}
-        logger.info('Begin message consuming')
+        self.logger.info('Begin message consuming')
         while self.state == ServiceState.started:
             msg = json.loads(await self.msgclient.recv_string())
             # deal with the coming msg
             if self.kdb_conn.is_connected():
-                # logger.info(eval(msg['data']))
+                # self.logger.info(eval(msg['data']))
                 self.kdb_conn.pub(type_dict[msg['type']],
                                   [pickle.loads(eval(msg['data']))], is_tickerplant = True)
             else:
@@ -65,7 +57,7 @@ class DeribitMDConsumer(ServiceBase):
         while self.state == ServiceState.started:
             msg = await self.msgclient2.recv_string()
             # deal with the coming msg
-            logger.info(msg)
+            self.logger.info(msg)
 
     async def run(self):
         if self.state == ServiceState.started:

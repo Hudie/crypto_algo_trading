@@ -7,7 +7,16 @@ import zmq.asyncio
 import asyncio
 import tornado
 import json
+import logging
 
+
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+fh = logging.FileHandler('services.log', mode='a')
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s : %(message)s")
+fh.setFormatter(formatter)
+logger.addHandler(fh)
 
 
 class ServiceState(Enum):

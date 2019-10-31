@@ -8,16 +8,8 @@ import websockets
 import json
 import pickle
 import time
-import logging
 
 
-
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-fh = logging.FileHandler('deribit_md.log', mode='a')
-formatter = logging.Formatter("%(asctime)s - %(levelname)s: %(message)s")
-fh.setFormatter(formatter)
-logger.addHandler(fh)
 
 symbol = 'BTC'
 activechannels = set()
@@ -99,7 +91,7 @@ class DeribitMD(ServiceBase):
         # get marketdata from exchange socket, then pub to zmq
         try:
             async with websockets.connect('wss://www.deribit.com/ws/api/v2') as websocket:
-                logger.info('Connected to deribit websocket server')
+                self.logger.info('Connected to deribit websocket server')
                 global activechannels, hourlyupdated
                 # set heartbeats to keep alive
                 await websocket.send(json.dumps(heartbeat))
@@ -125,7 +117,7 @@ class DeribitMD(ServiceBase):
                     
                     # update instruments every hour
                     if time.gmtime().tm_min == 5 and hourlyupdated == False:
-                        logger.info('Fetching instruments hourly ******')
+                        self.logger.info('Fetching instruments hourly ******')
                         await websocket.send(json.dumps(instruments))
                         hourlyupdated = True
                     elif time.gmtime().tm_min == 31 and hourlyupdated == True:
@@ -136,7 +128,7 @@ class DeribitMD(ServiceBase):
                     response = json.loads(await websocket.recv())
                     # need response heartbeat to keep alive
                     if response.get('method', '') == 'heartbeat':
-                        # logger.info(str(response))
+                        # self.logger.info(str(response))
                         if response['params']['type'] == 'test_request':
                             lastheartbeat = time.time()
                             await websocket.send(json.dumps(test))
@@ -146,8 +138,8 @@ class DeribitMD(ServiceBase):
                             for j in ('trades', 'ticker', 'book'):
                                 newchannels.add('.'.join([j, i['instrument_name'], 'raw']))
                         if len(newchannels.difference(activechannels)) > 0:
-                            logger.info('There are new channels as following:')
-                            logger.info(str(newchannels.difference(activechannels)))
+                            self.logger.info('There are new channels as following:')
+                            self.logger.info(str(newchannels.difference(activechannels)))
                             subscribe['params']['channels'] = list(newchannels)
                             await websocket.send(json.dumps(subscribe))
                             unsubscribe['params']['channels'] = list(activechannels.difference(newchannels))
@@ -163,7 +155,7 @@ class DeribitMD(ServiceBase):
                     elif response.get('id', '') in (8212, 8691, 3600):
                         pass
                     else:
-                        # logger.info(str(response['params']['data']))
+                        # self.logger.info(str(response['params']['data']))
                         if response['params']['channel'].startswith('trades'):
                             for i in response['params']['data']:
                                 self.pubserver.send_string(json.dumps({'type': 'trade',
@@ -182,7 +174,7 @@ class DeribitMD(ServiceBase):
                     if self.state == ServiceState.started:
                         await self.pub_msg()
         except Exception as e:
-            logger.error(e)
+            self.logger.exception(e)
             await self.pub_msg()
 
     async def run(self):
