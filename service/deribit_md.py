@@ -128,10 +128,11 @@ class DeribitMD(ServiceBase):
                     response = json.loads(await websocket.recv())
                     # need response heartbeat to keep alive
                     if response.get('method', '') == 'heartbeat':
-                        self.logger.info('Serverside heartbeat: ' + str(response))
                         if response['params']['type'] == 'test_request':
                             lastheartbeat = time.time()
                             await websocket.send(json.dumps(test))
+                        else:
+                            self.logger.info('Serverside heartbeat: ' + str(response))
                     elif response.get('id', '') == 7617:
                         newchannels = set()
                         for i in response['result']:
