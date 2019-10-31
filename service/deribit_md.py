@@ -128,7 +128,7 @@ class DeribitMD(ServiceBase):
                     response = json.loads(await websocket.recv())
                     # need response heartbeat to keep alive
                     if response.get('method', '') == 'heartbeat':
-                        # self.logger.info(str(response))
+                        self.logger.info('Serverside heartbeat: ' + str(response))
                         if response['params']['type'] == 'test_request':
                             lastheartbeat = time.time()
                             await websocket.send(json.dumps(test))
