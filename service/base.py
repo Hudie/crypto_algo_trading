@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from logging.handlers import RotatingFileHandler
 from tornado.platform.asyncio import AsyncIOMainLoop
 from enum import Enum
 import logging
@@ -13,7 +14,7 @@ import logging
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-fh = logging.FileHandler('services.log', mode='a')
+fh = RotatingFileHandler('services.log', maxBytes=100*1024*1024, backupCount=10)
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s : %(message)s")
 fh.setFormatter(formatter)
 logger.addHandler(fh)
