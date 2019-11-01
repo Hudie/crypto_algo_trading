@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-from tornado.platform.asyncio import AsyncIOMainLoop
 from crypto_foundation.api.deribit_parser import parse_deribit_trade, parse_deribit_quote, parse_deribit_order_book, parse_deribit_instrument
 from base import ServiceState, ServiceBase, start_service
 import zmq.asyncio
@@ -33,8 +32,6 @@ subscribe = {
     "method" : "public/subscribe",
     "params" : {
         "channels" : [
-            #"book.BTC-27SEP19-8000-C.10.10.100ms",
-            #"ticker.BTC-11OCT19-9500-C.raw",
             #"ticker.BTC-11OCT19-9750-C.raw",
         ]
     }

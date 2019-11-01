@@ -3,7 +3,6 @@
 from logging.handlers import RotatingFileHandler
 from tornado.platform.asyncio import AsyncIOMainLoop
 from enum import Enum
-import logging
 import zmq.asyncio
 import asyncio
 import tornado

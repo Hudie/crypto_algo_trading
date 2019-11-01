@@ -35,7 +35,8 @@ async def on_request():
            service_node_status[msg['sid']] = msg
            logger.info(str(service_node_status))
     except Exception as e:
-        logger.error(e)
+        logger.exception(e)
+        await on_request()
 
 class ControlHandler(tornado.web.RequestHandler):
     async def post(self):

@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 # from utility.enum import enum
-from tornado.platform.asyncio import AsyncIOMainLoop
 from base import ServiceState, ServiceBase, start_service
 from crypto_foundation.kdb.kdb_connection import KDBConn
 from crypto_foundation.kdb.kdb_table_def import crypto_quotes, crypto_trades, crypto_instruments, deribit_order_books
