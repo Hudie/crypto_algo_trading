@@ -10,25 +10,30 @@ import time
 
 
 
-symbol = 'BTC'
 activechannels = set()
 hourlyupdated = False
 
-AUTH_MSG_ID = 9929
+DERIBIT_EXCHANGE_ID = 101
+DERIBIT_CLIENT_ID = "8VP1NV2u"
+DERIBIT_CLIENT_SECRET = "LEnJgX-u5LpROjpOKGVcY_NRbC_nByBIOg-mCflwzMg"
+SYMBOL = 'BTC'
+
+MSG_AUTH_ID = 9929
 auth = {
     "jsonrpc" : "2.0",
-    "id" : 9929,
+    "id" : MSG_AUTH_ID,
     "method" : "public/auth",
     "params" : {
         "grant_type" : "client_credentials",
-        "client_id" : "8VP1NV2u",
-        "client_secret" : "LEnJgX-u5LpROjpOKGVcY_NRbC_nByBIOg-mCflwzMg"
+        "client_id" : DERIBIT_CLIENT_ID,
+        "client_secret" : DERIBIT_CLIENT_SECRET
     }
 }
 
+MSG_SUBSCRIBE_ID = 3600
 subscribe = {
     "jsonrpc" : "2.0",
-    "id" : 3600,
+    "id" : MSG_SUBSCRIBE_ID,
     "method" : "public/subscribe",
     "params" : {
         "channels" : [
@@ -37,37 +42,41 @@ subscribe = {
     }
 }
 
+MSG_UNSUBSCRIBE_ID = 8691
 unsubscribe = {
     "jsonrpc" : "2.0",
-    "id" : 8691,
+    "id" : MSG_UNSUBSCRIBE_ID,
     "method" : "public/unsubscribe",
     "params" : {
         "channels" : []
     }
 }
 
+MSG_HEARTBEAT_ID = 110
 heartbeat = {
     "method": "public/set_heartbeat",
     "params": {
         "interval": 10
     },
     "jsonrpc": "2.0",
-    "id": 110
+    "id": MSG_HEARTBEAT_ID
 }
 
+MSG_TEST_ID = 8212
 test = {
     "jsonrpc" : "2.0",
-    "id" : 8212,
+    "id" : MSG_TEST_ID,
     "method" : "public/test",
     "params" : {}
 }
 
+MSG_INSTRUMENTS_ID = 7617
 instruments = {
     "jsonrpc" : "2.0",
-    "id" : 7617,
+    "id" : MSG_INSTRUMENTS_ID,
     "method" : "public/get_instruments",
     "params" : {
-        "currency" : symbol,
+        "currency" : SYMBOL,
         "kind" : "option",
         "expired" : False
     }
@@ -130,7 +139,7 @@ class DeribitMD(ServiceBase):
                             await websocket.send(json.dumps(test))
                         else:
                             self.logger.info('Serverside heartbeat: ' + str(response))
-                    elif response.get('id', '') == 7617:
+                    elif response.get('id', '') == MSG_INSTRUMENTS_ID:
                         newchannels = set()
                         for i in response['result']:
                             for j in ('trades', 'ticker', 'book'):
@@ -150,7 +159,7 @@ class DeribitMD(ServiceBase):
                                     self.pubserver.send_string(json.dumps({'type': 'instrument',
                                                                            'data': str(pickle.dumps(parse_deribit_instrument(i)))}))
                             activechannels = newchannels
-                    elif response.get('id', '') in (8212, 8691, 3600):
+                    elif response.get('id', '') in (MSG_TEST_ID, MSG_SUBSCRIBE_ID, MSG_UNSUBSCRIBE_ID):
                         pass
                     else:
                         # self.logger.info(str(response['params']['data']))
