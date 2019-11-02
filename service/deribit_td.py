@@ -121,8 +121,9 @@ class DeribitMD(ServiceBase):
                     else:
                         # self.logger.info(str(response['params']['data']))
                         # deal tx response
-                        update_tx_msg
-                        pub_data
+                        if changed:
+                            update_tx_msg
+                            pub_data
                 else:
                     if self.state == ServiceState.started:
                         await self.pub_msg()
@@ -138,12 +139,13 @@ class DeribitMD(ServiceBase):
                 # think more about the req/rep data structure!!!
                 await repserver.send_string(json.dumps({'msg': 'copy'}))
                 self.logger.info(str(msg))
-                # msg: {'exid': DERIBIT_EXCHANGE_ID, 'sid': xxx, 'accountid': xxx, 'nonce': 12, 'method': 'buy',
+                # msg: {'sid': xxx, 'internalid': 12, 'exid': DERIBIT_EXCHANGE_ID, 'accountid': xxx,
+                # 'method': 'buy',
                 # 'params': {'instrument_name': 'BTC-11OCT19-9750-C', 'amount': 1, 'type': 'market/limit', 'price':xxx, 'stop_price': xxx, 'trigger': xxx},
                 # }
-                # store_msg_and_set_status # use redis, install in docker
+                # store_msg_and_set_status # stored in kdb
                 msg.update({'status': 'accepted'})
-                key = '.'.join([msg[i] for i in ('exid', 'sid', 'accountid', 'nonce')])
+                key = '.'.join([msg[i] for i in ('sid', 'internalid', 'exid', 'accountid')])
                 orders[key] = msg
                 send_msg_2deribit
                 msg.update({'status': 'sent'})

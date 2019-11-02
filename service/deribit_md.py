@@ -109,7 +109,7 @@ class DeribitMD(ServiceBase):
                 lastheartbeat = time.time()
                 while websocket.open and self.state == ServiceState.started:
                     # check heartbeat to see if websocket is broken
-                    if time.time() - lastheartbeat > 15:
+                    if time.time() - lastheartbeat > 30:
                         raise websockets.exceptions.ConnectionClosedError(1003, 'Serverside heartbeat stopped.')
                     
                     # update instruments every hour
