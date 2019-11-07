@@ -4,6 +4,7 @@
 from base import ServiceState, ServiceBase, start_service
 from crypto_foundation.kdb.kdb_connection import KDBConn
 from crypto_foundation.kdb.kdb_table_def import crypto_quotes, crypto_trades, crypto_instruments, deribit_order_books
+from crypto_foundation.common.util import np_datetime64_utc_now
 import zmq.asyncio
 import asyncio
 import json
@@ -37,26 +38,35 @@ class DeribitMDConsumer(ServiceBase):
         
     # deal with data source 1
     async def sub_msg(self):
-        type_dict = {'quote': crypto_quotes, 'trade': crypto_trades,
-                     'book': deribit_order_books, 'instrument': crypto_instruments}
-        self.logger.info('Begin message consuming')
-        while self.state == ServiceState.started:
-            msg = json.loads(await self.msgclient.recv_string())
-            # deal with the coming msg
-            if self.kdb_conn.is_connected():
-                # self.logger.info(eval(msg['data']))
-                self.kdb_conn.pub(type_dict[msg['type']],
-                                  [pickle.loads(eval(msg['data']))], is_tickerplant = True)
-            else:
-                self.kdb_conn.close()
-                self.kdb_conn.open()
+        try:
+            type_dict = {'quote': crypto_quotes, 'trade': crypto_trades,
+                         'book': deribit_order_books, 'instrument': crypto_instruments}
+            self.logger.info('Begin message consuming')
+            while self.state == ServiceState.started:
+                msg = json.loads(await self.msgclient.recv_string())
+                # deal with the coming msg
+                if self.kdb_conn.is_connected():
+                    # self.logger.info(eval(msg['data']))
+                    data = pickle.loads(eval(msg['data']))
+                    data.update({'api_rec_time': np_datetime64_utc_now(), 'api_send_time': 0})
+                    self.kdb_conn.pub(type_dict[msg['type']], [data], is_tickerplant = True)
+                else:
+                    self.kdb_conn.close()
+                    self.kdb_conn.open()
+        except Exception as e:
+            logger.exception(e)
+            await self.sub_msg()
 
     # deal with data source 2
     async def sub_msg2(self):
-        while self.state == ServiceState.started:
-            msg = await self.msgclient2.recv_string()
-            # deal with the coming msg
-            self.logger.info(msg)
+        try:
+            while self.state == ServiceState.started:
+                msg = await self.msgclient2.recv_string()
+                # deal with the coming msg
+                self.logger.info(msg)
+        except Exception as e:
+            logger.exception(e)
+            await self.sub_msg()
 
     async def run(self):
         if self.state == ServiceState.started:
