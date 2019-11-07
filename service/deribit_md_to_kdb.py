@@ -48,7 +48,7 @@ class DeribitMDConsumer(ServiceBase):
                 if self.kdb_conn.is_connected():
                     # self.logger.info(eval(msg['data']))
                     data = pickle.loads(eval(msg['data']))
-                    data.update({'api_rec_time': np_datetime64_utc_now(), 'api_send_time': 0})
+                    # data.update({'api_rec_time': np_datetime64_utc_now(), 'api_send_time': 0})
                     self.kdb_conn.pub(type_dict[msg['type']], [data], is_tickerplant = True)
                 else:
                     self.kdb_conn.close()
