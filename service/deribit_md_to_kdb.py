@@ -54,7 +54,7 @@ class DeribitMDConsumer(ServiceBase):
                     self.kdb_conn.close()
                     self.kdb_conn.open()
         except Exception as e:
-            logger.exception(e)
+            self.logger.exception(e)
             await self.sub_msg()
 
     # deal with data source 2
@@ -65,7 +65,7 @@ class DeribitMDConsumer(ServiceBase):
                 # deal with the coming msg
                 self.logger.info(msg)
         except Exception as e:
-            logger.exception(e)
+            self.logger.exception(e)
             await self.sub_msg()
 
     async def run(self):
