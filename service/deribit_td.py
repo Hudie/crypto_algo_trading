@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 
 from crypto_foundation.api.deribit_parser import parse_deribit_trade, parse_deribit_quote, parse_deribit_order_book, parse_deribit_instrument
-from crypto_foundation.common.constant import Ecn
+from crypto_foundation.common.constant import Ecn, Broker, MarketDataApi, TradeDataApi
+from crypto_foundation.common.account import CryptoTradingAccount
 from base import ServiceState, ServiceBase, start_service
 import zmq.asyncio
 import asyncio
@@ -13,6 +14,10 @@ import time
 
 
 orders = {}
+# id, is_alive, posinfo, orderinfo
+accountsinfo = []
+# key: accountid, value: request queue
+requests = {}
 
 DERIBIT_EXCHANGE_ID = Ecn.deribit
 DERIBIT_CLIENT_ID = "8VP1NV2u"
@@ -49,20 +54,8 @@ test = {
     "params" : {}
 }
 
-MSG_INSTRUMENTS_ID = 7617
-instruments = {
-    "jsonrpc" : "2.0",
-    "id" : MSG_INSTRUMENTS_ID,
-    "method" : "public/get_instruments",
-    "params" : {
-        "currency" : SYMBOL,
-        "kind" : "option",
-        "expired" : False
-    }
-}
-
   
-class DeribitMD(ServiceBase):
+class DeribitTD(ServiceBase):
     
     def __init__(self, sid, logger_name):
         ServiceBase.__init__(self, logger_name)
@@ -75,15 +68,32 @@ class DeribitMD(ServiceBase):
         self.repserver = self.ctx.socket(zmq.REP)
         self.repserver.bind('tcp://*:9020')
 
-    async def pub_msg(self, accountid):
+    async def send_request(self, account, websocket):
+        try:
+            self.logger.info('Account %s is ready for sending requests' % account.id)
+            while websocket.open and self.state == ServiceState.started:
+                if account.id in requests:
+                    mq = requests[account.id]
+                    if mq.qszie > 0:
+                        msg = mq.get()
+                        if msg['type'] == 'xxx':
+                            await websocket.send(msg)
+                        else:
+                            pass
+        except Exception as e:
+            self.logger.exception(e)
+        
+    async def pub_msg(self, account):
         # get tx data from exchange socket, then store it and pub it to zmq
         try:
             async with websockets.connect('wss://www.deribit.com/ws/api/v2') as websocket:
-                self.logger.info('Connected to deribit websocket server')
+                self.logger.info('Account %s connected to deribit websocket server' % account.id)
                 
                 # set heartbeats to keep alive
                 await websocket.send(json.dumps(heartbeat))
                 await websocket.recv()
+
+                asyncio.create_task(self.send_request(account, websocket))
 
                 # it is very important here to use 'self.state' to control start/stop!!!
                 lastheartbeat = time.time()
@@ -92,7 +102,7 @@ class DeribitMD(ServiceBase):
                     if time.time() - lastheartbeat > 15:
                         raise websockets.exceptions.ConnectionClosedError(1003, 'Serverside heartbeat stopped.')
 
-                    # send all requests to deribit
+                    # check request queue to send all request
 
                     # then deal with every received msg
                     response = json.loads(await websocket.recv())
@@ -107,15 +117,18 @@ class DeribitMD(ServiceBase):
                     else:
                         # self.logger.info(str(response['params']['data']))
                         # deal tx response
+                        pass
+                        '''
                         if changed:
                             update_tx_msg
                             pub_data
+                        '''
                 else:
                     if self.state == ServiceState.started:
-                        await self.pub_msg()
+                        await self.pub_msg(account)
         except Exception as e:
             self.logger.exception(e)
-            await self.pub_msg()
+            await self.pub_msg(account)
 
     # deal with user request from zmq
     async def on_request(self):
@@ -131,11 +144,9 @@ class DeribitMD(ServiceBase):
                 # }
                 # store_msg_and_set_status # stored in kdb
                 msg.update({'status': 'accepted'})
-                key = '.'.join([msg[i] for i in ('sid', 'internalid', 'exid', 'accountid')])
-                orders[key] = msg
-                # send_msg_2deribit_use_account_specific_websocket
-                asyncio.create_task(pub_msg(accountid))
-                # msg.update({'status': 'sent'})
+                # key = '.'.join([msg[i] for i in ('sid', 'internalid', 'exid', 'accountid')])
+                orders[msg['accountid']].append(msg)
+                requests[msg['accountid']].put(msg)
         except Exception as e:
             self.logger.exception(e)
             await self.on_request()
@@ -146,11 +157,22 @@ class DeribitMD(ServiceBase):
             self.logger.error('tried to run service, but state is %s' % self.state)
         else:
             self.state = ServiceState.started
-            # await asyncio.gather(self.pub_msg(), self.on_request())
+            # init account info
+            testaccount = CryptoTradingAccount("deribit_test_account",
+                                               Broker.deribit_dma, "testid", "",
+                                               MarketDataApi.deribit_md_websocket,
+                                               TradeDataApi.deribit_td_websocket,
+                                               DERIBIT_CLIENT_ID, DERIBIT_CLIENT_SECRET)
+            accountsinfo.append(testaccount)
+            # create websocket for every account
+            for account in accountsinfo:
+                asyncio.create_task(self.pub_msg(account))
+                # requests[account.id].append(initrequests)
+            # fetch account info, including orders and pos
             await self.on_request()
 
 
     
 if __name__ == '__main__':
-    service = DeribitMD('deribit-td', 'deribit-td')
+    service = DeribitTD('deribit-td', 'deribit-td')
     start_service(service, {'port': 9010, 'ip': 'localhost'})
