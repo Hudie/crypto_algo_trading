@@ -14,7 +14,7 @@ import logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 fh = RotatingFileHandler('services.log', maxBytes=100*1024*1024, backupCount=10)
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s : %(message)s")
+formatter = logging.Formatter("%(asctime)s - %(name)s:%(lineno)d - %(levelname)s : %(message)s")
 fh.setFormatter(formatter)
 logger.addHandler(fh)
 
