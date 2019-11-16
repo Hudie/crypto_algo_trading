@@ -62,6 +62,14 @@ MSG_CANCEL_ALL_ID	= 8748
 MSG_GET_ORDER_STATE_ID	= 4316
 MSG_GET_OPEN_ORDERS_BY_CURRENCY_ID	= 1953
 
+def get_random_id():
+    count = 0
+    while True:
+        yield ':'.join([str(int(time.time())), str(count)])
+        count += 1
+randomid = get_random_id()
+
+
   
 class DeribitTD(ServiceBase):
     
@@ -75,6 +83,7 @@ class DeribitTD(ServiceBase):
         # REP server for transaction requests
         self.repserver = self.ctx.socket(zmq.REP)
         self.repserver.bind('tcp://*:9020')
+
 
     async def pub_msg(self, account):
         # get tx data from exchange socket, then store it and pub it to zmq
@@ -130,7 +139,48 @@ class DeribitTD(ServiceBase):
                         else:
                             # deal tx response
                             self.logger.info(response)
-                            await self.pubserver.send_string(json.dumps({'accountid': account.id, 'result': response}))
+                            if response.get('id', '') == MSG_GET_OPEN_ORDERS_BY_CURRENCY_ID:
+                                await self.pubserver.send_string(json.dumps({
+                                    'accountid': account.id,
+                                    'type': 'open_orders',
+                                    'data': response['result']}))
+                            elif response.get('id', '') == MSG_GET_POSITION_ID:
+                                await self.pubserver.send_string(json.dumps({
+                                    'accountid': account.id,
+                                    'type': 'position',
+                                    'data': response['result']}))
+                            elif response.get('id', '') == MSG_GET_POSITIONS_ID:
+                                await self.pubserver.send_string(json.dumps({
+                                    'accountid': account.id,
+                                    'type': 'positions',
+                                    'data': response['result']}))
+                            elif response.get('id', '') == MSG_GET_ORDER_STATE_ID:
+                                await self.pubserver.send_string(json.dumps({
+                                    'accountid': account.id,
+                                    'type': 'order_state',
+                                    'data': response['result']}))
+                            elif response.get('id', '') == MSG_CANCEL_ID:
+                                await self.pubserver.send_string(json.dumps({
+                                    'accountid': account.id,
+                                    'type': 'cancel',
+                                    'data': response['result']}))
+                            elif response.get('id', '') == MSG_CANCEL_ALL_ID:
+                                await self.pubserver.send_string(json.dumps({
+                                    'accountid': account.id,
+                                    'type': 'cancel_all',
+                                    'data': response['result']}))
+                            elif response.get('id', '') == MSG_BUY_ID:
+                                await self.pubserver.send_string(json.dumps({
+                                    'accountid': account.id,
+                                    'type': 'buy',
+                                    'data': response['result']}))
+                            elif response.get('id', '') == MSG_SELL_ID:
+                                await self.pubserver.send_string(json.dumps({
+                                    'accountid': account.id,
+                                    'type': 'sell',
+                                    'data': response['result']}))
+                            else:
+                                pass
                 else:
                     if self.state == ServiceState.started:
                         await self.pub_msg(account)
@@ -138,20 +188,26 @@ class DeribitTD(ServiceBase):
             self.logger.exception(e)
             await self.pub_msg(account)
 
+
     # deal with user request from zmq
+    # msg : {'sid': xxx, 'userid': 12, 'accountid': xxx,
+    #        'method': 'get_postions',
+    #        'params': {'currency': 'BTC', 'kind': 'option'} }
     async def on_request(self):
         try:
             while self.state == ServiceState.started:
                 msg = json.loads(await self.repserver.recv_string())
-                await self.repserver.send_string(json.dumps({'msg': 'copy'}))
+                internalid = ':'.join([msg['sid'], msg.get('userid', ''), msg['accountid'], next(randomid)])
+                await self.repserver.send_string(json.dumps({'internalid': internalid}))
+
+                msg['params'].update({'label': internalid})
                 self.logger.info('**** Request received:')
                 self.logger.info(msg)
-                # msg : {'sid': xxx, 'userid': 12, 'accountid': xxx,
-                #        'method': 'get_postions',
-                #        'params': {'currency': 'BTC', 'kind': 'option'} }
-
-                msg.update({'status': 'accepted'})
-                # orders[msg['accountid']].append(msg)
+                '''
+                if msg['accountid'] not in orders:
+                    orders[msg['accountid']] = []
+                orders[msg['accountid']].append(msg)
+                '''
                 if msg['accountid'] not in requests:
                     requests[msg['accountid']] = queue.Queue()
                 requests[msg['accountid']].put({'method': msg['method'], 'params': msg['params']})
