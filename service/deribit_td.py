@@ -121,7 +121,8 @@ class DeribitTD(ServiceBase):
                             lastheartbeat = time.time()
 
                     # then deal with every received msg
-                    task = asyncio.create_task(websocket.recv())
+                    # task = asyncio.create_task(websocket.recv())
+                    task = asyncio.ensure_future(websocket.recv())
                     done, pending = await asyncio.wait({task}, timeout=0.0001)
                     for t in pending:
                         t.cancel()
@@ -231,7 +232,8 @@ class DeribitTD(ServiceBase):
             
             # create websocket for every account
             for account in accounts:
-                asyncio.create_task(self.pub_msg(account))
+                # asyncio.create_task(self.pub_msg(account))
+                asyncio.ensure_future(self.pub_msg(account))
                 # fetch account info, including orders and pos
                 requests[account.id] = queue.Queue()
                 requests[account.id].put({'method': 'get_positions', 'params': {'currency': 'BTC', 'kind': 'option'}})
