@@ -13,7 +13,8 @@ import time
 
 
 
-QUOTE_GAP = 0.004
+QUOTE_GAP = 0.003
+WITHIN_SECONDS = 32 * 24 * 3600		# 32 days
 
 quotes = {}
 
@@ -37,7 +38,8 @@ class CatchGap(ServiceBase):
 
     def find_quotes_gap(self):
         for k, v in quotes.items():
-            if not v.get('gapped', False):
+            if all((not v.get('gapped', False),
+                    time.mktime(time.strptime(k.split('-')[1], '%d%b%y')) - time.time() < WITHIN_SECONDS )):
                 if 'deribit' in v.keys() and 'okex' in v.keys():
                     if v['deribit'][0] and v['okex'][2]:
                         if v['deribit'][0] - float(v['okex'][2]) >= QUOTE_GAP:
@@ -47,6 +49,12 @@ class CatchGap(ServiceBase):
                         if float(v['okex'][0]) - v['deribit'][2] >= QUOTE_GAP:
                             self.logger.info(k + '--' + str(v))
                             v['gapped'] = True
+
+    async def gap_transaction(self):
+        # need make transaction at okex firstly, and then at deribit only after it returns successfully
+        # make sure which side price is beyond the mark price, trade it first
+        # within N days, prefer OTM call first
+        pass
 
     async def sub_msg_deribit(self):
         while self.state == ServiceState.started:
