@@ -41,11 +41,11 @@ class CatchGap(ServiceBase):
                 if 'deribit' in v.keys() and 'okex' in v.keys():
                     if v['deribit'][0] and v['okex'][2]:
                         if v['deribit'][0] - float(v['okex'][2]) >= QUOTE_GAP:
-                            self.logger.info(k + str(v))
+                            self.logger.info(k + '--' + str(v))
                             v['gapped'] = True
                     if v['deribit'][2] and v['okex'][0]:
                         if float(v['okex'][0]) - v['deribit'][2] >= QUOTE_GAP:
-                            self.logger.info(k + str(v))
+                            self.logger.info(k + '--' + str(v))
                             v['gapped'] = True
 
     async def sub_msg_deribit(self):

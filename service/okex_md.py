@@ -8,6 +8,7 @@ import json
 import pickle
 import time
 import zlib
+import asyncio
 
 
 
@@ -41,95 +42,29 @@ class OkexMD(ServiceBase):
                 await ws.send(json.dumps({"op": "subscribe", "args": ["option/instruments:BTC-USD"]}))
                 response = json.loads(inflate(await ws.recv()))
                 # self.logger.info(response)
-                
-                while ws.open and self.state == ServiceState.started:
-                    response = json.loads(inflate(await ws.recv()))
-                    # self.logger.info(response)
-                    if response.get('table', '') == 'option/instruments':
-                        await ws.send(json.dumps({"op": "subscribe",
-                                                  "args": ["option/depth5:" + i['instrument_id'] for i in response['data']]}))
-                    elif response.get('table', '') == 'option/depth5':
-                        # self.logger.info(response['data'])
-                        self.pubserver.send_string(json.dumps(response))
-                else:
-                    if self.state == ServiceState.started:
-                        await self.pub_msg()
-                    
-                '''
-                global activechannels, hourlyupdated
-                # get instruments and then update channels
-                await websocket.send(json.dumps(instruments))
-                response = json.loads(await websocket.recv())
-                for i in response['result']:
-                    self.pubserver.send_string(json.dumps({'type': 'instrument',
-                                                           'data': str(pickle.dumps(parse_deribit_instrument(i)))}))
-                    for j in ('trades', 'ticker', 'book'):
-                        activechannels.add('.'.join([j, i['instrument_name'], 'raw']))
-                subscribe['params']['channels'] = list(activechannels)
-                await websocket.send(json.dumps(subscribe))
-                hourlyupdated = True
 
-                # it is very important here to use 'self.state' to control start/stop!!!
                 lastheartbeat = time.time()
-                while websocket.open and self.state == ServiceState.started:
-                    # check heartbeat to see if websocket is broken
-                    if time.time() - lastheartbeat > 30:
-                        raise websockets.exceptions.ConnectionClosedError(1003, 'Serverside heartbeat stopped.')
-                    
-                    # update instruments every hour
-                    if time.gmtime().tm_min == 5 and hourlyupdated == False:
-                        self.logger.info('Fetching instruments hourly ******')
-                        await websocket.send(json.dumps(instruments))
-                        hourlyupdated = True
-                    elif time.gmtime().tm_min == 31 and hourlyupdated == True:
-                        hourlyupdated = False
+                while ws.open and self.state == ServiceState.started:
+                    task = asyncio.ensure_future(ws.recv())
+                    done, pending = await asyncio.wait({task}, timeout=0.0001)
+                    for t in pending:
+                        t.cancel()
+                    response = json.loads(inflate(done.pop().result())) if done else {}
+
+                    if response:
+                        lastheartbeat = time.time()
+                        if response.get('table', '') == 'option/instruments':
+                            await ws.send(json.dumps({"op": "subscribe",
+                                                      "args": ["option/depth5:" + i['instrument_id'] for i in response['data']]}))
+                        elif response.get('table', '') == 'option/depth5':
+                            # self.logger.info(response['data'])
+                            self.pubserver.send_string(json.dumps(response))
                     else:
-                        pass
-                    
-                    response = json.loads(await websocket.recv())
-                    # need response heartbeat to keep alive
-                    if response.get('id', '') == MSG_INSTRUMENTS_ID:
-                        newchannels = set()
-                        for i in response['result']:
-                            for j in ('trades', 'ticker', 'book'):
-                                newchannels.add('.'.join([j, i['instrument_name'], 'raw']))
-                        if len(newchannels.difference(activechannels)) > 0:
-                            self.logger.info('There are new channels as following:')
-                            self.logger.info(str(newchannels.difference(activechannels)))
-                            subscribe['params']['channels'] = list(newchannels)
-                            await websocket.send(json.dumps(subscribe))
-                            unsubscribe['params']['channels'] = list(activechannels.difference(newchannels))
-                            await websocket.send(json.dumps(unsubscribe))
-                            newinstruments = set()
-                            for i in newchannels.difference(activechannels):
-                                newinstruments.add(i.split('.')[1])
-                            for i in response['result']:
-                                if i['instrument_name'] in newinstruments:
-                                    self.pubserver.send_string(json.dumps({'type': 'instrument',
-                                                                           'data': str(pickle.dumps(parse_deribit_instrument(i)))}))
-                            activechannels = newchannels
-                    elif response.get('id', '') in (MSG_TEST_ID, MSG_SUBSCRIBE_ID, MSG_UNSUBSCRIBE_ID):
-                        pass
-                    else:
-                        # self.logger.info(str(response['params']['data']))
-                        if response['params']['channel'].startswith('trades'):
-                            for i in response['params']['data']:
-                                self.pubserver.send_string(json.dumps({'type': 'trade',
-                                                                       'data': str(pickle.dumps(parse_deribit_trade(i)))}))
-                        elif response['params']['channel'].startswith('ticker'):
-                            self.pubserver.send_string(
-                                json.dumps({'type': 'quote',
-                                            'data': str(pickle.dumps(parse_deribit_quote(response['params']['data'])))}))
-                        elif response['params']['channel'].startswith('book'):
-                            self.pubserver.send_string(
-                                json.dumps({'type': 'book',
-                                            'data': str(pickle.dumps(parse_deribit_order_book(response['params']['data'])))}))
-                        else:
-                            pass
+                        if time.time() - lastheartbeat > 15:
+                            raise websockets.exceptions.ConnectionClosedError(1003, 'Serverside heartbeat stopped.')
                 else:
                     if self.state == ServiceState.started:
                         await self.pub_msg()
-                '''
         except Exception as e:
             self.logger.exception(e)
             await self.pub_msg()
