@@ -13,8 +13,8 @@ import time
 
 
 
-QUOTE_GAP = 0.003
-WITHIN_SECONDS = 32 * 24 * 3600		# 32 days
+QUOTE_GAP = 0.0045
+WITHIN_SECONDS = 15 * 24 * 3600
 
 quotes = {}
 
@@ -38,30 +38,29 @@ class CatchGap(ServiceBase):
 
     async def find_quotes_gap(self):
         for k, v in quotes.items():
-            if all(( not v.get('gapped', False),
-                     time.mktime(time.strptime(k.split('-')[1], '%d%b%y')) - time.time() < WITHIN_SECONDS,
-                     v.get('delta', 1) <= 0.3,
-                     # OTM & at least 1 sigma & CALL
-            )):
+            tmp = k.split('-')
+            if all((not v.get('gapped', False),
+                    time.mktime(time.strptime(tmp[1], '%d%b%y')) - time.time() < WITHIN_SECONDS,
+                    tmp[-1] == 'C' and float(tmp[2]) > float(v.get('index_price', 0)) + 400, )):
+                    # OTM
+                    # any((tmp[-1] == 'C' and float(tmp[2]) > float(v.get('index_price', 0)) + 400,
+                    #     tmp[-1] == 'P' and float(tmp[2]) < float(v.get('index_price', 0)) - 400, )), )):
                 if 'deribit' in v.keys() and 'okex' in v.keys():
-                    if v['deribit'][0] and v['okex'][2]:
-                        if v['deribit'][0] - float(v['okex'][2]) >= QUOTE_GAP:
-                            self.logger.info('%s -- gap: %.4f -- %s' %(k, v['deribit'][0] - float(v['okex'][2]), str(v)))
+                    if v['deribit'][0] and v['okex'][0]:
+                        if float(v['okex'][0]) - v['deribit'][0] >= QUOTE_GAP:
+                            self.logger.info(k + ' -- ' + str(v))
                             v['gapped'] = True
-                            asyncio.ensure_future(self.gap_transaction(k, v))
-                    if v['deribit'][2] and v['okex'][0]:
-                        if float(v['okex'][0]) - v['deribit'][2] >= QUOTE_GAP:
-                            self.logger.info('%s -- gap: %.4f -- %s' %(k, float(v['okex'][0]) - v['deribit'][2], str(v)))
+                            asyncio.ensure_future(self.gap_transaction())
+                    if v['deribit'][2] and v['okex'][2]:
+                        if v['deribit'][2] - float(v['okex'][2]) >= QUOTE_GAP:
+                            self.logger.info(k + ' -- ' + str(v))
                             v['gapped'] = True
-                            asyncio.ensure_future(self.gap_transaction(k, v))
+                            asyncio.ensure_future(self.gap_transaction())
 
-    async def gap_transaction(self, sym, quotes):
-        # 1. make sure both platforms can trade
-        # 2. find out which side price is beyond the deribit mark price, trade it firstly; if almost even, long firstly, then short
-        # 3. calculate how many contracts need to be traded concerning sizes and account situation
-        # 4. trade at one platform and make sure that it returns successfully, if not, how to deal with it?
-        # 5. trade at the other platform
-        # 6. check everything alright
+    async def gap_transaction(self):
+        # need make transaction at okex firstly, and then at deribit only after it returns successfully
+        # make sure which side price is beyond the mark price, trade it first
+        # within N days, prefer OTM call first
         pass
 
     async def sub_msg_deribit(self):
@@ -73,8 +72,7 @@ class CatchGap(ServiceBase):
                 newrecord = [quote['bid_prices'][0], quote['bid_sizes'][0], quote['ask_prices'][0], quote['ask_sizes'][0]]
                 if quotes.setdefault(quote['sym'], {}).get('deribit', []) != newrecord:
                     quotes[quote['sym']].update({'deribit': newrecord, 'gapped': False,
-                                                 'index_price': quote['index_price'], 'mark_price': quote['mark_price'],
-                                                 'delta': quote['delta'], })
+                                                 'index_price': quote['index_price'], 'mark_price': quote['mark_price']})
                     await self.find_quotes_gap()
 
     async def sub_msg_okex(self):
@@ -91,8 +89,7 @@ class CatchGap(ServiceBase):
                              quote['asks'][0][0] if len(quote['asks']) > 0 else None,
                              quote['asks'][0][1] if len(quote['asks']) > 0 else None]
                 if quotes.setdefault(sym, {}).get('okex', []) != newrecord:
-                    quotes[sym]['okex'] = newrecord
-                    quotes[sym]['gapped'] = False
+                    quotes[sym].update({'okex': newrecord, 'gapped': False})
                     await self.find_quotes_gap()
                 
     async def run(self):
@@ -107,5 +104,5 @@ class CatchGap(ServiceBase):
 
     
 if __name__ == '__main__':
-    service = CatchGap('catch_gap')
+    service = CatchGap('catch_gap_onsameside')
     start_service(service, {})

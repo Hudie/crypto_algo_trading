@@ -138,7 +138,8 @@ class DeribitMD(ServiceBase):
                             lastheartbeat = time.time()
                             await websocket.send(json.dumps(test))
                         else:
-                            self.logger.info('Serverside heartbeat: ' + str(response))
+                            pass
+                            # self.logger.info('Serverside heartbeat: ' + str(response))
                     elif response.get('id', '') == MSG_INSTRUMENTS_ID:
                         newchannels = set()
                         for i in response['result']:
