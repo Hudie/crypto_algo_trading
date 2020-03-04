@@ -60,7 +60,7 @@ class OkexMD(ServiceBase):
                             # self.logger.info(response['data'])
                             self.pubserver.send_string(json.dumps(response))
                     else:
-                        if time.time() - lastheartbeat > 15:
+                        if time.time() - lastheartbeat > 60:
                             raise websockets.exceptions.ConnectionClosedError(1003, 'Serverside heartbeat stopped.')
                 else:
                     if self.state == ServiceState.started:
