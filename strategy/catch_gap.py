@@ -15,7 +15,7 @@ import time
 
 
 
-QUOTE_GAP = ((0.0025, 7 * 24 * 3600), (0.0035, 14 * 24 *3600), (0.005, 31 * 24 * 3600))
+QUOTE_GAP = ((0.002, 7 * 24 * 3600), (0.003, 15 * 24 *3600), (0.004, 31 * 24 * 3600))
 
 deribit_apikey = 'CRSy0R7z'
 deribit_apisecret = 'FmpNkWyh4NmiFzMMlietKjJiELnceMlSNvkkipEGGQQ'
@@ -85,7 +85,8 @@ class CatchGap(ServiceBase):
                 ret = self.okexclient.order({'instrument_id': quote['oksym'],
                                              'side': 'sell' if if_okex_sell else 'buy',
                                              'price': quote['okex'][0] if if_okex_sell else quote['okex'][2],
-                                             'size': int(size * 10)})
+                                             'size': int(size * 10),
+                                             'order_type': '3', })
                 self.logger.info(ret)
                 if ret['error_code'] == '0' and ret['result'] == 'true':
                     order_id = ret['order_id']
@@ -105,22 +106,24 @@ class CatchGap(ServiceBase):
                         config.access_token = res['result']['access_token']
                         tradingapi = openapi_client.TradingApi(openapi_client.ApiClient(config))
                         if if_okex_sell:
-                            res = tradingapi.private_buy_get(sym, size, price=quote['deribit'][2])
+                            res = tradingapi.private_buy_get(sym, size, price=quote['deribit'][2], time_in_force='immediate_or_cancel')
                         else:
-                            res = tradingapi.private_sell_get(sym, size, price=quote['deribit'][0])
+                            res = tradingapi.private_sell_get(sym, size, price=quote['deribit'][0], time_in_force='immediate_or_cancel')
                         self.logger.info(res)
                         order = res['result']['order']
                         while order['filled_amount'] < order['amount']:
                             if if_okex_sell:
                                 if order['price'] + 0.0005 <= quote['okex'][0]:
-                                    res = tradingapi.private_buy_get(sym, order['amount']-order['filled_amount'], price=order['price']+0.0005)
+                                    res = tradingapi.private_buy_get(sym, order['amount']-order['filled_amount'],
+                                                                     price=order['price']+0.0005, time_in_force='immediate_or_cancel')
                                     order = res['result']['order']
                                     self.logger.info(res)
                                 else:
                                     break
                             else:
                                 if res['price'] - 0.0005 >= quote['okex'][2]:
-                                    res = tradingapi.private_sell_get(sym, order['amount']-order['filled_amount'], price=order['price']-0.0005)
+                                    res = tradingapi.private_sell_get(sym, order['amount']-order['filled_amount'],
+                                                                      price=order['price']-0.0005, time_in_force='immediate_or_cancel')
                                     order = res['result']['order']
                                     self.logger.info(res)
                                 else:

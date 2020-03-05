@@ -53,6 +53,8 @@ class OkexMD(ServiceBase):
 
                     if response:
                         lastheartbeat = time.time()
+                        if int(lastheartbeat) % 3600 == 0:
+                            self.logger.info('Websocket has been running for another hour')
                         if response.get('table', '') == 'option/instruments':
                             await ws.send(json.dumps({"op": "subscribe",
                                                       "args": ["option/depth5:" + i['instrument_id'] for i in response['data']]}))
@@ -65,6 +67,8 @@ class OkexMD(ServiceBase):
                 else:
                     if self.state == ServiceState.started:
                         await self.pub_msg()
+        except websockets.exceptions.ConnectionClosedError:
+            await self.pub_msg()
         except Exception as e:
             self.logger.exception(e)
             await self.pub_msg()
