@@ -15,8 +15,11 @@ import time
 
 
 
-QUOTE_GAP = ((0.002, 0.3, 7 * 24 * 3600), (0.003, 0.3, 15 * 24 *3600),
-             (0.004, 0.3, 31 * 24 * 3600), (0.01, 1, 31 * 24 * 3600))
+QUOTE_GAP = ((0.0015, 0.3, 7 * 24 * 3600),
+             (0.003, 0.3, 15 * 24 *3600),
+             (0.0045, 0.3, 31 * 24 * 3600),
+             # (0.01, 1, 31 * 24 * 3600),
+)
 
 deribit_apikey = 'CRSy0R7z'
 deribit_apisecret = 'FmpNkWyh4NmiFzMMlietKjJiELnceMlSNvkkipEGGQQ'
@@ -90,7 +93,8 @@ class CatchGap(ServiceBase):
                                              'side': 'sell' if if_okex_sell else 'buy',
                                              'price': quote['okex'][0] if if_okex_sell else quote['okex'][2],
                                              'size': int(size * 10),
-                                             'order_type': '3', })
+                                             # 'order_type': '3',
+                })
                 self.logger.info(ret)
                 if ret['error_code'] == '0' and ret['result'] == 'true':
                     order_id = ret['order_id']
