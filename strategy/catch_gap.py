@@ -15,7 +15,8 @@ import time
 
 
 
-QUOTE_GAP = ((0.002, 7 * 24 * 3600), (0.003, 15 * 24 *3600), (0.004, 31 * 24 * 3600))
+QUOTE_GAP = ((0.002, 0.3, 7 * 24 * 3600), (0.003, 0.3, 15 * 24 *3600),
+             (0.004, 0.3, 31 * 24 * 3600), (0.01, 1, 31 * 24 * 3600))
 
 deribit_apikey = 'CRSy0R7z'
 deribit_apisecret = 'FmpNkWyh4NmiFzMMlietKjJiELnceMlSNvkkipEGGQQ'
@@ -50,23 +51,26 @@ class CatchGap(ServiceBase):
             for k, v in quotes.items():
                 if all(( not v.get('gapped', False),
                          # time.mktime(time.strptime(k.split('-')[1], '%d%b%y')) - time.time() < WITHIN_SECONDS,
-                         abs(v.get('delta', 1)) <= 0.3,
+                         # abs(v.get('delta', 1)) <= 0.3,
                          # OTM & at least 1 sigma & CALL
                 )):
                     timedelta = time.mktime(time.strptime(k.split('-')[1], '%d%b%y')) - time.time()
+                    delta = abs(v.get('delta', 1))
                     if 'deribit' in v.keys() and 'okex' in v.keys():
                         if v['deribit'][0] and v['okex'][2]:
-                            for (gap, delta) in QUOTE_GAP:
-                                if v['deribit'][0] - float(v['okex'][2]) >= gap and timedelta <= delta:
+                            for (gap, d, t) in QUOTE_GAP:
+                                if v['deribit'][0] - float(v['okex'][2]) >= gap and timedelta <= t and delta <= d:
                                     self.logger.info('%s -- gap: %.4f -- %s' %(k, v['deribit'][0] - float(v['okex'][2]), str(v)))
                                     v['gapped'] = True
                                     asyncio.ensure_future(self.gap_trade(k, v, False))
+                                    break
                         if v['deribit'][2] and v['okex'][0]:
-                            for (gap, delta) in QUOTE_GAP:
-                                if float(v['okex'][0]) - v['deribit'][2] >= gap and timedelta <= delta:
+                            for (gap, d, t) in QUOTE_GAP:
+                                if float(v['okex'][0]) - v['deribit'][2] >= gap and timedelta <= t and delta <= d:
                                     self.logger.info('%s -- gap: %.4f -- %s' %(k, float(v['okex'][0]) - v['deribit'][2], str(v)))
                                     v['gapped'] = True
                                     asyncio.ensure_future(self.gap_trade(k, v, True))
+                                    break
         except Exception as e:
             self.logger.exception(e)
 

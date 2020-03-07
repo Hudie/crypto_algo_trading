@@ -41,7 +41,6 @@ class OkexMD(ServiceBase):
 
                 await ws.send(json.dumps({"op": "subscribe", "args": ["option/instruments:BTC-USD"]}))
                 response = json.loads(inflate(await ws.recv()))
-                # self.logger.info(response)
 
                 lastheartbeat = time.time()
                 while ws.open and self.state == ServiceState.started:
@@ -52,10 +51,10 @@ class OkexMD(ServiceBase):
                     response = json.loads(inflate(done.pop().result())) if done else {}
 
                     if response:
+                        # self.logger.info(response)
                         lastheartbeat = time.time()
-                        if int(lastheartbeat) % 3600 == 0:
-                            self.logger.info('Websocket has been running for another hour')
                         if response.get('table', '') == 'option/instruments':
+                            self.logger.info('Instruments updated')
                             await ws.send(json.dumps({"op": "subscribe",
                                                       "args": ["option/depth5:" + i['instrument_id'] for i in response['data']]}))
                         elif response.get('table', '') == 'option/depth5':
@@ -63,7 +62,7 @@ class OkexMD(ServiceBase):
                             self.pubserver.send_string(json.dumps(response))
                     else:
                         if time.time() - lastheartbeat > 60:
-                            raise websockets.exceptions.ConnectionClosedError(1003, 'Serverside heartbeat stopped.')
+                            raise websockets.exceptions.ConnectionClosedError(1003, 'Serverside heartbeat stopped')
                 else:
                     if self.state == ServiceState.started:
                         await self.pub_msg()

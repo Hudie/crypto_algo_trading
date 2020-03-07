@@ -13,8 +13,8 @@ import time
 
 
 
-QUOTE_GAP = 0.0045
-WITHIN_SECONDS = 15 * 24 * 3600
+QUOTE_GAP = 0.003
+WITHIN_SECONDS = 31 * 24 * 3600
 
 quotes = {}
 
@@ -41,7 +41,7 @@ class CatchGap(ServiceBase):
             tmp = k.split('-')
             if all((not v.get('gapped', False),
                     time.mktime(time.strptime(tmp[1], '%d%b%y')) - time.time() < WITHIN_SECONDS,
-                    tmp[-1] == 'C' and float(tmp[2]) > float(v.get('index_price', 0)) + 400, )):
+                    tmp[-1] == 'C' and float(tmp[2]) > float(v.get('index_price', 0)), )):
                     # OTM
                     # any((tmp[-1] == 'C' and float(tmp[2]) > float(v.get('index_price', 0)) + 400,
                     #     tmp[-1] == 'P' and float(tmp[2]) < float(v.get('index_price', 0)) - 400, )), )):
