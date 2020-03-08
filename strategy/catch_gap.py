@@ -15,9 +15,9 @@ import time
 
 
 
-QUOTE_GAP = ((0.0005, 0.3, 7 * 24 * 3600),
-             (0.003, 0.3, 15 * 24 *3600),
-             (0.0045, 0.3, 31 * 24 * 3600),
+QUOTE_GAP = ((0.0025, 0.33, 7 * 24 * 3600),
+             (0.0035, 0.31, 15 * 24 *3600),
+             (0.0055, 0.3, 31 * 24 * 3600),
              # (0.01, 1, 31 * 24 * 3600),
 )
 OKEX_BALANCE_THRESHOLD = 0.2		# keep 20% margin
@@ -27,7 +27,7 @@ deribit_apikey = 'CRSy0R7z'
 deribit_apisecret = 'FmpNkWyh4NmiFzMMlietKjJiELnceMlSNvkkipEGGQQ'
 
 quotes = {}
-total_open_size = 0.2
+total_open_size = 1
 opened_size = 0
 
 
@@ -67,14 +67,16 @@ class CatchGap(ServiceBase):
                                 if v['deribit'][0] - float(v['okex'][2]) >= gap and timedelta <= t and delta <= d:
                                     self.logger.info('%s -- gap: %.4f -- %s' %(k, v['deribit'][0] - float(v['okex'][2]), str(v)))
                                     v['gapped'] = True
-                                    asyncio.ensure_future(self.gap_trade(k, v, False))
+                                    # asyncio.ensure_future(self.gap_trade(k, v, False))
+                                    await self.gap_trade(k, v, False)
                                     break
                         if v['deribit'][2] and v['okex'][0]:
                             for (gap, d, t) in QUOTE_GAP:
                                 if float(v['okex'][0]) - v['deribit'][2] >= gap and timedelta <= t and delta <= d:
                                     self.logger.info('%s -- gap: %.4f -- %s' %(k, float(v['okex'][0]) - v['deribit'][2], str(v)))
                                     v['gapped'] = True
-                                    asyncio.ensure_future(self.gap_trade(k, v, True))
+                                    # asyncio.ensure_future(self.gap_trade(k, v, True))
+                                    await self.gap_trade(k, v, True)
                                     break
         except Exception as e:
             self.logger.exception(e)
@@ -107,17 +109,20 @@ class CatchGap(ServiceBase):
             deriavail = max(deribal.get('margin_balance', 0) - deribal.get('equity', 0) * DERIBIT_BALANCE_THESHOLD, 0)
 
             if if_okex_sell:
-                size = max( min(float(quote['okex'][1])/10, quote['deribit'][3]),
-                            total_open_size - opened_size,
-                            okexavail / 0.1,
-                            deriavail / quote['deribit'][2])
+                size = min(float(quote['okex'][1])/10,
+                           quote['deribit'][3],
+                           total_open_size - opened_size,
+                           okexavail / 0.1,
+                           deriavail / quote['deribit'][2])
             else:
-                size = max( min(float(quote['okex'][3])/10, quote['deribit'][1]),
-                            total_open_size - opened_size,
-                            okexavail / quote['okex'][2],
-                            deriavail / 0.1)
+                size = min(float(quote['okex'][3])/10,
+                           quote['deribit'][1],
+                           total_open_size - opened_size,
+                           okexavail / float(quote['okex'][2]),
+                           deriavail / 0.1)
 
             if size > 0:
+                self.logger.info('trade size: %f' % size)
                 ret = self.okexclient.order({'instrument_id': quote['oksym'],
                                              'side': 'sell' if if_okex_sell else 'buy',
                                              'price': quote['okex'][0] if if_okex_sell else quote['okex'][2],
@@ -128,9 +133,14 @@ class CatchGap(ServiceBase):
                 if ret['error_code'] == '0' and ret['result'] == 'true':
                     order_id = ret['order_id']
                     order_status = self.okexclient.get_order_status(order_id)
-                    if order_status['state'] != '2':	# means not filled completely
-                        self.okexclient.cancel_order(order_id)
-                    filled_qty = int(self.okexclient.get_order_status(order_id).get('filled_qty', 0))
+                    self.logger.info(order_status)
+                    try:
+                        if order_status['state'] != '2':	# means not filled completely
+                            self.okexclient.cancel_order(order_id)
+                            order_status = self.okexclient.get_order_status(order_id)
+                    except Exception as e:
+                        self.logger.info(e)
+                    filled_qty = int(order_status.get('filled_qty', 0))
                     opened_size += filled_qty
                     if filled_qty > 0:
                         # deribit trade using http request, if not successful, how?
