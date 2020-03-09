@@ -27,7 +27,7 @@ deribit_apikey = 'CRSy0R7z'
 deribit_apisecret = 'FmpNkWyh4NmiFzMMlietKjJiELnceMlSNvkkipEGGQQ'
 
 quotes = {}
-total_open_size = 1
+total_open_size = 5
 opened_size = 0
 
 
@@ -51,33 +51,31 @@ class CatchGap(ServiceBase):
         self.okexclient = OptionAPI('3b43d558-c6e6-4460-b8dd-1e542bc8c6c1',
                                     '90EB8F53AABAE20C67FB7E3B0EFBB318', 'mogu198812', True)
 
-    async def find_quotes_gap(self):
+    async def find_quotes_gap(self, sym):
         try:
-            for k, v in quotes.items():
-                if all(( not v.get('gapped', False),
-                         # time.mktime(time.strptime(k.split('-')[1], '%d%b%y')) - time.time() < WITHIN_SECONDS,
-                         # abs(v.get('delta', 1)) <= 0.3,
-                         # OTM & at least 1 sigma & CALL
-                )):
-                    timedelta = time.mktime(time.strptime(k.split('-')[1], '%d%b%y')) - time.time()
-                    delta = abs(v.get('delta', 1))
-                    if 'deribit' in v.keys() and 'okex' in v.keys():
-                        if v['deribit'][0] and v['okex'][2]:
-                            for (gap, d, t) in QUOTE_GAP:
-                                if v['deribit'][0] - float(v['okex'][2]) >= gap and timedelta <= t and delta <= d:
-                                    self.logger.info('%s -- gap: %.4f -- %s' %(k, v['deribit'][0] - float(v['okex'][2]), str(v)))
-                                    v['gapped'] = True
-                                    # asyncio.ensure_future(self.gap_trade(k, v, False))
-                                    await self.gap_trade(k, v, False)
-                                    break
-                        if v['deribit'][2] and v['okex'][0]:
-                            for (gap, d, t) in QUOTE_GAP:
-                                if float(v['okex'][0]) - v['deribit'][2] >= gap and timedelta <= t and delta <= d:
-                                    self.logger.info('%s -- gap: %.4f -- %s' %(k, float(v['okex'][0]) - v['deribit'][2], str(v)))
-                                    v['gapped'] = True
-                                    # asyncio.ensure_future(self.gap_trade(k, v, True))
-                                    await self.gap_trade(k, v, True)
-                                    break
+            v = quotes[sym]
+            if all(( not v.get('gapped', False),
+                     not v.get('trading', False),
+            )):
+                timedelta = time.mktime(time.strptime(sym.split('-')[1], '%d%b%y')) - time.time()
+                delta = abs(v.get('delta', 1))
+                if 'deribit' in v.keys() and 'okex' in v.keys():
+                    if v['deribit'][0] and v['okex'][2]:
+                        for (gap, d, t) in QUOTE_GAP:
+                            if v['deribit'][0] - float(v['okex'][2]) >= gap and timedelta <= t and delta <= d:
+                                self.logger.info('%s -- gap: %.4f -- %s' %(sym, v['deribit'][0] - float(v['okex'][2]), str(v)))
+                                v.update({'gapped': True, 'trading': True})
+                                # asyncio.ensure_future(self.gap_trade(sym, v, False))
+                                await self.gap_trade(sym, v, False)
+                                break
+                    if v['deribit'][2] and v['okex'][0]:
+                        for (gap, d, t) in QUOTE_GAP:
+                            if float(v['okex'][0]) - v['deribit'][2] >= gap and timedelta <= t and delta <= d:
+                                self.logger.info('%s -- gap: %.4f -- %s' %(sym, float(v['okex'][0]) - v['deribit'][2], str(v)))
+                                v.update({'gapped': True, 'trading': True})
+                                # asyncio.ensure_future(self.gap_trade(sym, v, True))
+                                await self.gap_trade(sym, v, True)
+                                break
         except Exception as e:
             self.logger.exception(e)
 
@@ -94,6 +92,7 @@ class CatchGap(ServiceBase):
             # okposition = self.okexclient.get_position(quote['oksym'])
             # size = 0.1	# small amount every time? controlling risk. And size < min(bid, ask)
             # check okex balance & deribit balance
+            '''
             okexbal = self.okexclient.get_account_info()
             okexavail = max(float(okexbal.get('avail_margin', 0)) - float(okexbal.get('total_avail_balance', 0)) * OKEX_BALANCE_THRESHOLD, 0)
 
@@ -107,19 +106,24 @@ class CatchGap(ServiceBase):
             accountapi = openapi_client.AccountManagementApi(openapi_client.ApiClient(config))
             deribal = accountapi.private_get_account_summary_get('BTC').get('result', {})
             deriavail = max(deribal.get('margin_balance', 0) - deribal.get('equity', 0) * DERIBIT_BALANCE_THESHOLD, 0)
+            '''
 
             if if_okex_sell:
-                size = min(float(quote['okex'][1])/10,
-                           quote['deribit'][3],
-                           total_open_size - opened_size,
-                           okexavail / 0.1,
-                           deriavail / quote['deribit'][2])
+                size = min(
+                    float(quote['okex'][1])/10,
+                    quote['deribit'][3],
+                    total_open_size - opened_size,
+                    # okexavail / 0.1,
+                    # deriavail / quote['deribit'][2],
+                )
             else:
-                size = min(float(quote['okex'][3])/10,
-                           quote['deribit'][1],
-                           total_open_size - opened_size,
-                           okexavail / float(quote['okex'][2]),
-                           deriavail / 0.1)
+                size = min(
+                    float(quote['okex'][3])/10,
+                    quote['deribit'][1],
+                    total_open_size - opened_size,
+                    # okexavail / float(quote['okex'][2]),
+                    # deriavail / 0.1,
+                )
 
             if size > 0:
                 self.logger.info('trade size: %f' % size)
@@ -127,10 +131,10 @@ class CatchGap(ServiceBase):
                                              'side': 'sell' if if_okex_sell else 'buy',
                                              'price': quote['okex'][0] if if_okex_sell else quote['okex'][2],
                                              'size': str(int(size * 10)),
-                                             # 'order_type': '3',
                 })
                 self.logger.info(ret)
                 if ret['error_code'] == '0' and ret['result'] == 'true':
+                    # await asyncio.sleep(10)
                     order_id = ret['order_id']
                     order_status = self.okexclient.get_order_status(order_id)
                     self.logger.info(order_status)
@@ -153,7 +157,7 @@ class CatchGap(ServiceBase):
                         order = res['result']['order']
                         while order['filled_amount'] < order['amount']:
                             if if_okex_sell:
-                                if order['price'] + 0.0005 <= quote['okex'][0]:
+                                if order['price'] + 0.0005 <= float(quote['okex'][0]):
                                     res = tradingapi.private_buy_get(sym, order['amount']-order['filled_amount'],
                                                                      price=order['price']+0.0005, time_in_force='immediate_or_cancel')
                                     order = res['result']['order']
@@ -161,13 +165,14 @@ class CatchGap(ServiceBase):
                                 else:
                                     break
                             else:
-                                if res['price'] - 0.0005 >= quote['okex'][2]:
+                                if res['price'] - 0.0005 >= float(quote['okex'][2]):
                                     res = tradingapi.private_sell_get(sym, order['amount']-order['filled_amount'],
                                                                       price=order['price']-0.0005, time_in_force='immediate_or_cancel')
                                     order = res['result']['order']
                                     self.logger.info(res)
                                 else:
                                     break
+                        quote['trading'] = False
         except Exception as e:
             self.logger.exception(e)
 
@@ -183,7 +188,7 @@ class CatchGap(ServiceBase):
                         quotes[quote['sym']].update({'deribit': newrecord, 'gapped': False,
                                                      'index_price': quote['index_price'], 'mark_price': quote['mark_price'],
                                                      'delta': quote['delta'], })
-                        await self.find_quotes_gap()
+                        await self.find_quotes_gap(quote['sym'])
         except Exception as e:
             self.logger.exception(e)
 
@@ -204,7 +209,7 @@ class CatchGap(ServiceBase):
                     if quotes.setdefault(sym, {}).get('okex', []) != newrecord:
                         quotes[sym].update({'okex': newrecord, 'gapped': False, 'oksym': quote['instrument_id'], })
                         
-                        await self.find_quotes_gap()
+                        await self.find_quotes_gap(sym)
         except Exception as e:
             self.logger.exception(e)
                 
