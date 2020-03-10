@@ -65,16 +65,16 @@ class CatchGap(ServiceBase):
                             if v['deribit'][0] - float(v['okex'][2]) >= gap and timedelta <= t and delta <= d:
                                 self.logger.info('%s -- gap: %.4f -- %s' %(sym, v['deribit'][0] - float(v['okex'][2]), str(v)))
                                 v.update({'gapped': True, 'trading': True})
-                                # asyncio.ensure_future(self.gap_trade(sym, v, False))
-                                await self.gap_trade(sym, v, False)
+                                asyncio.ensure_future(self.gap_trade(sym, v, False))
+                                # await self.gap_trade(sym, v, False)
                                 break
                     if v['deribit'][2] and v['okex'][0]:
                         for (gap, d, t) in QUOTE_GAP:
                             if float(v['okex'][0]) - v['deribit'][2] >= gap and timedelta <= t and delta <= d:
                                 self.logger.info('%s -- gap: %.4f -- %s' %(sym, float(v['okex'][0]) - v['deribit'][2], str(v)))
                                 v.update({'gapped': True, 'trading': True})
-                                # asyncio.ensure_future(self.gap_trade(sym, v, True))
-                                await self.gap_trade(sym, v, True)
+                                asyncio.ensure_future(self.gap_trade(sym, v, True))
+                                # await self.gap_trade(sym, v, True)
                                 break
         except Exception as e:
             self.logger.exception(e)
@@ -123,6 +123,7 @@ class CatchGap(ServiceBase):
                 )
 
             if size > 0:
+                opened_size += size
                 self.logger.info('trade size: %f' % size)
                 ret = self.okexclient.order({'instrument_id': quote['oksym'],
                                              'side': 'sell' if if_okex_sell else 'buy',
@@ -130,8 +131,10 @@ class CatchGap(ServiceBase):
                                              'size': str(int(size * 10)),
                 })
                 self.logger.info(ret)
-                if ret['error_code'] == '0' and ret['result'] == 'true':
-                    # await asyncio.sleep(10)
+                
+                if not (ret['error_code'] == '0' and ret['result'] == 'true'):
+                    opened_size -= size
+                else:
                     order_id = ret['order_id']
                     order_status = self.okexclient.get_order_status(order_id)
                     self.logger.info(order_status)
@@ -141,8 +144,8 @@ class CatchGap(ServiceBase):
                             order_status = self.okexclient.get_order_status(order_id)
                     except Exception as e:
                         self.logger.info(e)
-                    filled_qty = int(order_status.get('filled_qty', 0))
-                    opened_size += filled_qty
+                    filled_qty = float(order_status.get('filled_qty', 0))/10
+                    opened_size -= size - filled_qty
                     
                     if filled_qty > 0:
                         auth = openapi_client.AuthenticationApi()
@@ -155,9 +158,9 @@ class CatchGap(ServiceBase):
                         tradingapi = openapi_client.TradingApi(openapi_client.ApiClient(config))
                         
                         if if_okex_sell:
-                            res = tradingapi.private_buy_get(sym, size, price=quote['deribit'][2], time_in_force='immediate_or_cancel')
+                            res = tradingapi.private_buy_get(sym, filled_qty, price=quote['deribit'][2], time_in_force='immediate_or_cancel')
                         else:
-                            res = tradingapi.private_sell_get(sym, size, price=quote['deribit'][0], time_in_force='immediate_or_cancel')
+                            res = tradingapi.private_sell_get(sym, filled_qty, price=quote['deribit'][0], time_in_force='immediate_or_cancel')
                         self.logger.info(res)
                         order = res['result']['order']
                         while order['filled_amount'] < order['amount']:
