@@ -80,19 +80,16 @@ class CatchGap(ServiceBase):
             self.logger.exception(e)
 
     async def gap_trade(self, sym, quote, if_okex_sell):
-        # 1. make sure both platforms can trade
-        # 2. find out which side price is beyond the deribit mark price, trade it firstly; if almost even, long firstly, then short
-        # 3. calculate how many contracts need to be traded concerning sizes and account situation
-        # 4. trade at one platform and make sure that it returns successfully, if not, how to deal with it?
-        # 5. trade at the other platform
-        # 6. check everything alright
+        # make sure both platforms can trade
+        # calculate how many contracts need to be traded concerning sizes and account situation
+        # trade at one platform and make sure that it returns successfully, if not, how to deal with it?
+        # trade at the other platform
+        # check everything alright
         try:
             global opened_size, total_open_size
 
-            # okposition = self.okexclient.get_position(quote['oksym'])
-            # size = 0.1	# small amount every time? controlling risk. And size < min(bid, ask)
-            # check okex balance & deribit balance
             '''
+            # check okex balance & deribit balance
             okexbal = self.okexclient.get_account_info()
             okexavail = max(float(okexbal.get('avail_margin', 0)) - float(okexbal.get('total_avail_balance', 0)) * OKEX_BALANCE_THRESHOLD, 0)
 
@@ -146,9 +143,17 @@ class CatchGap(ServiceBase):
                         self.logger.info(e)
                     filled_qty = int(order_status.get('filled_qty', 0))
                     opened_size += filled_qty
+                    
                     if filled_qty > 0:
-                        # deribit trade using http request, if not successful, how?
+                        auth = openapi_client.AuthenticationApi()
+                        res = auth.public_auth_get(grant_type='client_credentials',
+                                                   username='', password='',
+                                                   client_id=deribit_apikey, client_secret=deribit_apisecret,
+                                                   refresh_token='', timestamp='', signature='')
+                        config = openapi_client.Configuration()
+                        config.access_token = res['result']['access_token']
                         tradingapi = openapi_client.TradingApi(openapi_client.ApiClient(config))
+                        
                         if if_okex_sell:
                             res = tradingapi.private_buy_get(sym, size, price=quote['deribit'][2], time_in_force='immediate_or_cancel')
                         else:
@@ -182,12 +187,10 @@ class CatchGap(ServiceBase):
                 msg = json.loads(await self.deribitmsgclient.recv_string())
                 if msg['type'] == 'quote':
                     quote = pickle.loads(eval(msg['data']))
-                    # print(quote)
                     newrecord = [quote['bid_prices'][0], quote['bid_sizes'][0], quote['ask_prices'][0], quote['ask_sizes'][0]]
                     if quotes.setdefault(quote['sym'], {}).get('deribit', []) != newrecord:
-                        quotes[quote['sym']].update({'deribit': newrecord, 'gapped': False,
-                                                     'index_price': quote['index_price'], 'mark_price': quote['mark_price'],
-                                                     'delta': quote['delta'], })
+                        quotes[quote['sym']].update({'deribit': newrecord, 'gapped': False, 'index_price': quote['index_price'],
+                                                     'mark_price': quote['mark_price'], 'delta': quote['delta'], })
                         await self.find_quotes_gap(quote['sym'])
         except Exception as e:
             self.logger.exception(e)
@@ -198,7 +201,6 @@ class CatchGap(ServiceBase):
                 msg = json.loads(await self.okexmsgclient.recv_string())
                 if msg['table'] == 'option/depth5':
                     quote = msg['data'][0]
-                    # print(quote)
                     tmp = quote['instrument_id'].split('-')
                     sym = '-'.join([tmp[0], time.strftime('%d%b%y', time.strptime(tmp[2], '%y%m%d')).upper(),
                                     tmp[3], tmp[4]])
@@ -208,7 +210,6 @@ class CatchGap(ServiceBase):
                                  quote['asks'][0][1] if len(quote['asks']) > 0 else None]
                     if quotes.setdefault(sym, {}).get('okex', []) != newrecord:
                         quotes[sym].update({'okex': newrecord, 'gapped': False, 'oksym': quote['instrument_id'], })
-                        
                         await self.find_quotes_gap(sym)
         except Exception as e:
             self.logger.exception(e)
@@ -217,7 +218,6 @@ class CatchGap(ServiceBase):
         if self.state == ServiceState.started:
             self.logger.error('tried to run service, but state is %s' % self.state)
         else:
-            print('Here in run body')
             self.state = ServiceState.started
             # await self.sub_msg()
             asyncio.ensure_future(self.sub_msg_deribit())
