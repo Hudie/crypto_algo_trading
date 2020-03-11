@@ -181,6 +181,8 @@ class DeribitMD(ServiceBase):
                 else:
                     if self.state == ServiceState.started:
                         await self.pub_msg()
+        except websockets.exceptions.ConnectionClosedError:
+            await self.pub_msg()
         except Exception as e:
             self.logger.exception(e)
             await self.pub_msg()

@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-# from crypto_foundation.api.deribit_parser import parse_deribit_trade, parse_deribit_quote, parse_deribit_order_book, parse_deribit_instrument
 from base import ServiceState, ServiceBase, start_service
 import zmq.asyncio
 import websockets
@@ -45,7 +44,7 @@ class OkexMD(ServiceBase):
                 lastheartbeat = time.time()
                 while ws.open and self.state == ServiceState.started:
                     task = asyncio.ensure_future(ws.recv())
-                    done, pending = await asyncio.wait({task}, timeout=0.0001)
+                    done, pending = await asyncio.wait({task}, timeout=5)
                     for t in pending:
                         t.cancel()
                     response = json.loads(inflate(done.pop().result())) if done else {}

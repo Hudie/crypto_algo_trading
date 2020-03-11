@@ -15,10 +15,12 @@ import time
 
 
 
-QUOTE_GAP = ((0.0025, 0.33, 7 * 24 * 3600),
-             (0.0035, 0.31, 15 * 24 *3600),
-             (0.0055, 0.3, 31 * 24 * 3600),
-             # (0.01, 1, 31 * 24 * 3600),
+QUOTE_GAP = (
+    (0.0045, 0.6, 3.5 * 24 * 3600),
+    (0.0025, 0.33, 7 * 24 * 3600),
+    (0.0035, 0.31, 15 * 24 *3600),
+    (0.0055, 0.3, 31 * 24 * 3600),
+    # (0.01, 1, 31 * 24 * 3600),
 )
 OKEX_BALANCE_THRESHOLD = 0.2		# keep 20% margin
 DERIBIT_BALANCE_THESHOLD = 0.2
@@ -143,7 +145,9 @@ class CatchGap(ServiceBase):
                             self.okexclient.cancel_order(order_id)
                             order_status = self.okexclient.get_order_status(order_id)
                     except Exception as e:
-                        self.logger.info(e)
+                        # self.logger.exception(e)
+                        self.logger.info('failed to cancel order')
+                        order_status = self.okexclient.get_order_status(order_id)
                     filled_qty = float(order_status.get('filled_qty', 0))/10
                     opened_size -= size - filled_qty
                     
