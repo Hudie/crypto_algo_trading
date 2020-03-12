@@ -177,7 +177,7 @@ class CatchGap(ServiceBase):
                                 else:
                                     break
                             else:
-                                if res['price'] - 0.0005 >= float(quote['okex'][2]):
+                                if order['price'] - 0.0005 >= float(quote['okex'][2]):
                                     res = tradingapi.private_sell_get(sym, order['amount']-order['filled_amount'],
                                                                       price=order['price']-0.0005, time_in_force='immediate_or_cancel')
                                     order = res['result']['order']
