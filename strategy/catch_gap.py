@@ -16,10 +16,10 @@ import time
 
 
 QUOTE_GAP = (
-    (0.0045, 0.6, 3.5 * 24 * 3600),
-    (0.0025, 0.33, 7 * 24 * 3600),
-    (0.0035, 0.31, 15 * 24 *3600),
-    (0.0055, 0.3, 31 * 24 * 3600),
+    (0.005, 0.36, 3 * 24 * 3600),
+    (0.0065, 0.33, 7 * 24 * 3600),
+    (0.009, 0.31, 15 * 24 *3600),
+    (0.015, 0.3, 31 * 24 * 3600),
     # (0.01, 1, 31 * 24 * 3600),
 )
 OKEX_BALANCE_THRESHOLD = 0.2		# keep 20% margin
@@ -29,7 +29,7 @@ deribit_apikey = 'CRSy0R7z'
 deribit_apisecret = 'FmpNkWyh4NmiFzMMlietKjJiELnceMlSNvkkipEGGQQ'
 
 quotes = {}
-total_open_size = 5
+total_open_size = 0.1
 opened_size = 0
 
 
@@ -53,11 +53,34 @@ class CatchGap(ServiceBase):
         self.okexclient = OptionAPI('3b43d558-c6e6-4460-b8dd-1e542bc8c6c1',
                                     '90EB8F53AABAE20C67FB7E3B0EFBB318', 'mogu198812', True)
 
+        self.deribitauth = openapi_client.AuthenticationApi()
+        res = self.deribitauth.public_auth_get(grant_type='client_credentials',
+                                               username='', password='',
+                                               client_id=deribit_apikey, client_secret=deribit_apisecret,
+                                               refresh_token='', timestamp='', signature='')
+        self.deribitconfig = openapi_client.Configuration()
+        self.deribitconfig.access_token = res['result']['access_token']
+        self.deribitconfig.refresh_token = res['result']['refresh_token']
+        self.deribittradingapi = openapi_client.TradingApi(openapi_client.ApiClient(self.deribitconfig))
+
+    async def refresh_token(self):
+        while True:
+            await asyncio.sleep(800)
+            res = self.deribitauth.public_auth_get(grant_type='refresh_token',
+                                                   username='', password='',
+                                                   client_id='', client_secret='',
+                                                   refresh_token=self.deribitconfig.refresh_token,
+                                                   timestamp='', signature='')
+            self.deribitconfig.access_token = res['result']['access_token']
+            self.deribitconfig.refresh_token = res['result']['refresh_token']
+            self.deribittradingapi = openapi_client.TradingApi(openapi_client.ApiClient(self.deribitconfig))
+
     async def find_quotes_gap(self, sym):
         try:
             v = quotes[sym]
             if all(( not v.get('gapped', False),
                      not v.get('trading', False),
+                     sym[-1] == 'C',
             )):
                 timedelta = time.mktime(time.strptime(sym.split('-')[1], '%d%b%y')) - time.time()
                 delta = abs(v.get('delta', 1))
@@ -94,17 +117,6 @@ class CatchGap(ServiceBase):
             # check okex balance & deribit balance
             okexbal = self.okexclient.get_account_info()
             okexavail = max(float(okexbal.get('avail_margin', 0)) - float(okexbal.get('total_avail_balance', 0)) * OKEX_BALANCE_THRESHOLD, 0)
-
-            auth = openapi_client.AuthenticationApi()
-            res = auth.public_auth_get(grant_type='client_credentials',
-                                       username='', password='',
-                                       client_id=deribit_apikey, client_secret=deribit_apisecret,
-                                       refresh_token='', timestamp='', signature='')
-            config = openapi_client.Configuration()
-            config.access_token = res['result']['access_token']
-            accountapi = openapi_client.AccountManagementApi(openapi_client.ApiClient(config))
-            deribal = accountapi.private_get_account_summary_get('BTC').get('result', {})
-            deriavail = max(deribal.get('margin_balance', 0) - deribal.get('equity', 0) * DERIBIT_BALANCE_THESHOLD, 0)
             '''
 
             if if_okex_sell:
@@ -115,6 +127,9 @@ class CatchGap(ServiceBase):
                     # okexavail / 0.1,
                     # deriavail / quote['deribit'][2],
                 )
+                # long firstly, then short
+                
+                
             else:
                 size = min(
                     float(quote['okex'][3])/10,
@@ -152,34 +167,26 @@ class CatchGap(ServiceBase):
                     opened_size -= size - filled_qty
                     
                     if filled_qty > 0:
-                        auth = openapi_client.AuthenticationApi()
-                        res = auth.public_auth_get(grant_type='client_credentials',
-                                                   username='', password='',
-                                                   client_id=deribit_apikey, client_secret=deribit_apisecret,
-                                                   refresh_token='', timestamp='', signature='')
-                        config = openapi_client.Configuration()
-                        config.access_token = res['result']['access_token']
-                        tradingapi = openapi_client.TradingApi(openapi_client.ApiClient(config))
                         
                         if if_okex_sell:
-                            res = tradingapi.private_buy_get(sym, filled_qty, price=quote['deribit'][2], time_in_force='immediate_or_cancel')
+                            res = self.deribittradingapi.private_buy_get(sym, filled_qty, price=quote['deribit'][2], time_in_force='immediate_or_cancel')
                         else:
-                            res = tradingapi.private_sell_get(sym, filled_qty, price=quote['deribit'][0], time_in_force='immediate_or_cancel')
+                            res = self.deribittradingapi.private_sell_get(sym, filled_qty, price=quote['deribit'][0], time_in_force='immediate_or_cancel')
                         self.logger.info(res)
                         order = res['result']['order']
                         while order['filled_amount'] < order['amount']:
                             if if_okex_sell:
                                 if order['price'] + 0.0005 <= float(quote['okex'][0]):
-                                    res = tradingapi.private_buy_get(sym, order['amount']-order['filled_amount'],
-                                                                     price=order['price']+0.0005, time_in_force='immediate_or_cancel')
+                                    res = self.deribittradingapi.private_buy_get(sym, order['amount']-order['filled_amount'],
+                                                                                 price=order['price']+0.0005, time_in_force='immediate_or_cancel')
                                     order = res['result']['order']
                                     self.logger.info(res)
                                 else:
                                     break
                             else:
                                 if order['price'] - 0.0005 >= float(quote['okex'][2]):
-                                    res = tradingapi.private_sell_get(sym, order['amount']-order['filled_amount'],
-                                                                      price=order['price']-0.0005, time_in_force='immediate_or_cancel')
+                                    res = self.deribittradingapi.private_sell_get(sym, order['amount']-order['filled_amount'],
+                                                                                  price=order['price']-0.0005, time_in_force='immediate_or_cancel')
                                     order = res['result']['order']
                                     self.logger.info(res)
                                 else:
