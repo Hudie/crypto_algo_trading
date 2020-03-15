@@ -16,10 +16,10 @@ import time
 
 
 QUOTE_GAP = (
-    (0.005, 0.36, 3 * 24 * 3600),
-    (0.0065, 0.33, 7 * 24 * 3600),
-    (0.009, 0.31, 15 * 24 *3600),
-    (0.015, 0.3, 31 * 24 * 3600),
+    (0.003, 0.36, 3 * 24 * 3600),
+    (0.005, 0.33, 7 * 24 * 3600),
+    (0.008, 0.31, 15 * 24 *3600),
+    (0.012, 0.3, 31 * 24 * 3600),
     # (0.01, 1, 31 * 24 * 3600),
 )
 OKEX_BALANCE_THRESHOLD = 0.2		# keep 20% margin
@@ -29,7 +29,7 @@ deribit_apikey = 'CRSy0R7z'
 deribit_apisecret = 'FmpNkWyh4NmiFzMMlietKjJiELnceMlSNvkkipEGGQQ'
 
 quotes = {}
-total_open_size = 0.1
+total_open_size = 1
 opened_size = 0
 
 
@@ -74,6 +74,7 @@ class CatchGap(ServiceBase):
             self.deribitconfig.access_token = res['result']['access_token']
             self.deribitconfig.refresh_token = res['result']['refresh_token']
             self.deribittradingapi = openapi_client.TradingApi(openapi_client.ApiClient(self.deribitconfig))
+            self.logger.info('deribit token refreshed')
 
     async def find_quotes_gap(self, sym):
         try:
@@ -130,7 +131,7 @@ class CatchGap(ServiceBase):
                     opened_size += size
                     self.logger.info('trade size: %f' % size)
                     res = self.deribittradingapi.private_buy_get(sym, size, price=quote['deribit'][2], time_in_force='immediate_or_cancel')
-                    self.logger.info(res)
+                    self.logger.info(res['result'])
                     filled_qty = res['result']['order']['filled_amount']
                     opened_size -= size - filled_qty
                     for price in (float(quote['okex'][0])-i*0.0005 for i in range(int((float(quote['okex'][0])-quote['deribit'][2])/0.0005))):
@@ -192,14 +193,14 @@ class CatchGap(ServiceBase):
                         
                         if filled_qty > 0:
                             res = self.deribittradingapi.private_sell_get(sym, filled_qty, price=quote['deribit'][0], time_in_force='immediate_or_cancel')
-                            self.logger.info(res)
+                            self.logger.info(res['result'])
                             order = res['result']['order']
                             while order['filled_amount'] < order['amount']:
                                 if order['price'] - 0.0005 >= float(quote['okex'][2]):
                                     res = self.deribittradingapi.private_sell_get(sym, order['amount']-order['filled_amount'],
                                                                                   price=order['price']-0.0005, time_in_force='immediate_or_cancel')
                                     order = res['result']['order']
-                                    self.logger.info(res)
+                                    self.logger.info(res['result'])
                                 else:
                                     break
             quote['trading'] = False
@@ -247,6 +248,7 @@ class CatchGap(ServiceBase):
             # await self.sub_msg()
             asyncio.ensure_future(self.sub_msg_deribit())
             asyncio.ensure_future(self.sub_msg_okex())
+            asyncio.ensure_future(self.refresh_token())
 
     
 if __name__ == '__main__':
