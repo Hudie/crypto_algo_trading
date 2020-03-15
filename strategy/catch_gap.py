@@ -91,7 +91,6 @@ class CatchGap(ServiceBase):
                                 self.logger.info('%s -- gap: %.4f -- %s' %(sym, v['deribit'][0] - float(v['okex'][2]), str(v)))
                                 v.update({'gapped': True, 'trading': True})
                                 asyncio.ensure_future(self.gap_trade(sym, v, False))
-                                # await self.gap_trade(sym, v, False)
                                 break
                     if v['deribit'][2] and v['okex'][0]:
                         for (gap, d, t) in QUOTE_GAP:
@@ -99,7 +98,6 @@ class CatchGap(ServiceBase):
                                 self.logger.info('%s -- gap: %.4f -- %s' %(sym, float(v['okex'][0]) - v['deribit'][2], str(v)))
                                 v.update({'gapped': True, 'trading': True})
                                 asyncio.ensure_future(self.gap_trade(sym, v, True))
-                                # await self.gap_trade(sym, v, True)
                                 break
         except Exception as e:
             self.logger.exception(e)
@@ -128,8 +126,34 @@ class CatchGap(ServiceBase):
                     # deriavail / quote['deribit'][2],
                 )
                 # long firstly, then short
-                
-                
+                if size > 0:
+                    opened_size += size
+                    self.logger.info('trade size: %f' % size)
+                    res = self.deribittradingapi.private_buy_get(sym, size, price=quote['deribit'][2], time_in_force='immediate_or_cancel')
+                    self.logger.info(res)
+                    filled_qty = res['result']['order']['filled_amount']
+                    opened_size -= size - filled_qty
+                    for price in (float(quote['okex'][0])-i*0.0005 for i in range(int((float(quote['okex'][0])-quote['deribit'][2])/0.0005))):
+                        if filled_qty > 0:
+                            ret = self.okexclient.order({'instrument_id': quote['oksym'],
+                                                         'side': 'sell',
+                                                         'price': str(price),
+                                                         'size': str(int(filled_qty * 10)), })
+                            self.logger.info(ret)
+                            if ret['error_code'] == '0' and ret['result'] == 'true':
+                                await asyncio.sleep(1)
+                                order_status = self.okexclient.get_order_status(ret['order_id'])
+                                self.logger.info(order_status)
+                                try:
+                                    if order_status['state'] != '2':	# means not filled completely
+                                        self.okexclient.cancel_order(order_id)
+                                        order_status = self.okexclient.get_order_status(order_id)
+                                except Exception as e:
+                                    self.logger.info('failed to cancel order')
+                                    order_status = self.okexclient.get_order_status(order_id)
+                                filled_qty = filled_qty - float(order_status.get('filled_qty', 0))/10
+                        else:
+                            break
             else:
                 size = min(
                     float(quote['okex'][3])/10,
@@ -139,51 +163,38 @@ class CatchGap(ServiceBase):
                     # deriavail / 0.1,
                 )
 
-            if size > 0:
-                opened_size += size
-                self.logger.info('trade size: %f' % size)
-                ret = self.okexclient.order({'instrument_id': quote['oksym'],
-                                             'side': 'sell' if if_okex_sell else 'buy',
-                                             'price': quote['okex'][0] if if_okex_sell else quote['okex'][2],
-                                             'size': str(int(size * 10)),
-                })
-                self.logger.info(ret)
-                
-                if not (ret['error_code'] == '0' and ret['result'] == 'true'):
-                    opened_size -= size
-                else:
-                    order_id = ret['order_id']
-                    order_status = self.okexclient.get_order_status(order_id)
-                    self.logger.info(order_status)
-                    try:
-                        if order_status['state'] != '2':	# means not filled completely
-                            self.okexclient.cancel_order(order_id)
-                            order_status = self.okexclient.get_order_status(order_id)
-                    except Exception as e:
-                        # self.logger.exception(e)
-                        self.logger.info('failed to cancel order')
-                        order_status = self.okexclient.get_order_status(order_id)
-                    filled_qty = float(order_status.get('filled_qty', 0))/10
-                    opened_size -= size - filled_qty
+                if size > 0:
+                    opened_size += size
+                    self.logger.info('trade size: %f' % size)
+                    ret = self.okexclient.order({'instrument_id': quote['oksym'],
+                                                 'side': 'buy',
+                                                 'price': quote['okex'][2],
+                                                 'size': str(int(size * 10)),
+                    })
+                    self.logger.info(ret)
                     
-                    if filled_qty > 0:
+                    if not (ret['error_code'] == '0' and ret['result'] == 'true'):
+                        opened_size -= size
+                    else:
+                        order_id = ret['order_id']
+                        order_status = self.okexclient.get_order_status(order_id)
+                        self.logger.info(order_status)
+                        try:
+                            if order_status['state'] != '2':	# means not filled completely
+                                self.okexclient.cancel_order(order_id)
+                                order_status = self.okexclient.get_order_status(order_id)
+                        except Exception as e:
+                            # self.logger.exception(e)
+                            self.logger.info('failed to cancel order')
+                            order_status = self.okexclient.get_order_status(order_id)
+                        filled_qty = float(order_status.get('filled_qty', 0))/10
+                        opened_size -= size - filled_qty
                         
-                        if if_okex_sell:
-                            res = self.deribittradingapi.private_buy_get(sym, filled_qty, price=quote['deribit'][2], time_in_force='immediate_or_cancel')
-                        else:
+                        if filled_qty > 0:
                             res = self.deribittradingapi.private_sell_get(sym, filled_qty, price=quote['deribit'][0], time_in_force='immediate_or_cancel')
-                        self.logger.info(res)
-                        order = res['result']['order']
-                        while order['filled_amount'] < order['amount']:
-                            if if_okex_sell:
-                                if order['price'] + 0.0005 <= float(quote['okex'][0]):
-                                    res = self.deribittradingapi.private_buy_get(sym, order['amount']-order['filled_amount'],
-                                                                                 price=order['price']+0.0005, time_in_force='immediate_or_cancel')
-                                    order = res['result']['order']
-                                    self.logger.info(res)
-                                else:
-                                    break
-                            else:
+                            self.logger.info(res)
+                            order = res['result']['order']
+                            while order['filled_amount'] < order['amount']:
                                 if order['price'] - 0.0005 >= float(quote['okex'][2]):
                                     res = self.deribittradingapi.private_sell_get(sym, order['amount']-order['filled_amount'],
                                                                                   price=order['price']-0.0005, time_in_force='immediate_or_cancel')
@@ -191,7 +202,7 @@ class CatchGap(ServiceBase):
                                     self.logger.info(res)
                                 else:
                                     break
-                        quote['trading'] = False
+            quote['trading'] = False
         except Exception as e:
             self.logger.exception(e)
 
