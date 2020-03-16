@@ -29,7 +29,7 @@ deribit_apikey = 'CRSy0R7z'
 deribit_apisecret = 'FmpNkWyh4NmiFzMMlietKjJiELnceMlSNvkkipEGGQQ'
 
 quotes = {}
-total_open_size = 1
+total_open_size = 0.2
 opened_size = 0
 
 
@@ -74,7 +74,7 @@ class CatchGap(ServiceBase):
             self.deribitconfig.access_token = res['result']['access_token']
             self.deribitconfig.refresh_token = res['result']['refresh_token']
             self.deribittradingapi = openapi_client.TradingApi(openapi_client.ApiClient(self.deribitconfig))
-            self.logger.info('deribit token refreshed')
+            # self.logger.info('deribit token refreshed')
 
     async def find_quotes_gap(self, sym):
         try:
@@ -127,7 +127,7 @@ class CatchGap(ServiceBase):
                     # deriavail / quote['deribit'][2],
                 )
                 # long firstly, then short
-                if size > 0:
+                if size >= 0.1:
                     opened_size += size
                     self.logger.info('trade size: %f' % size)
                     res = self.deribittradingapi.private_buy_get(sym, size, price=quote['deribit'][2], time_in_force='immediate_or_cancel')
@@ -164,7 +164,7 @@ class CatchGap(ServiceBase):
                     # deriavail / 0.1,
                 )
 
-                if size > 0:
+                if size >= 0.1:
                     opened_size += size
                     self.logger.info('trade size: %f' % size)
                     ret = self.okexclient.order({'instrument_id': quote['oksym'],
