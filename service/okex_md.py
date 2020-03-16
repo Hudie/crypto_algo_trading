@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from base import ServiceState, ServiceBase, start_service
+import dateutil.parser as dp
 import zmq.asyncio
 import websockets
 import json
@@ -8,12 +9,43 @@ import pickle
 import time
 import zlib
 import asyncio
+import requests
+import hmac
+import base64
+
 
 
 
 # activechannels = set()
 # hourlyupdated = False
+api_key = '3b43d558-c6e6-4460-b8dd-1e542bc8c6c1'
+secret_key = '90EB8F53AABAE20C67FB7E3B0EFBB318'
+passphrase = 'mogu198812'
 
+
+def get_server_time():
+    url = "http://www.okex.com/api/general/v3/time"
+    response = requests.get(url)
+    if response.status_code == 200:
+        return response.json()['iso']
+    else:
+        return ""
+
+def server_timestamp():
+    server_time = get_server_time()
+    parsed_t = dp.parse(server_time)
+    timestamp = parsed_t.timestamp()
+    return timestamp
+
+def login_params(timestamp, api_key, passphrase, secret_key):
+    message = timestamp + 'GET' + '/users/self/verify'
+    mac = hmac.new(bytes(secret_key, encoding='utf8'), bytes(message, encoding='utf-8'), digestmod='sha256')
+    d = mac.digest()
+    sign = base64.b64encode(d)
+
+    login_param = {"op": "login", "args": [api_key, passphrase, timestamp, sign.decode("utf-8")]}
+    login_str = json.dumps(login_param)
+    return login_str
 
 def inflate(data):
     decompress = zlib.decompressobj(-zlib.MAX_WBITS)
@@ -36,9 +68,14 @@ class OkexMD(ServiceBase):
         # get marketdata from exchange socket, then pub to zmq
         try:
             async with websockets.connect('wss://real.OKEx.com:8443/ws/v3') as ws:
-                self.logger.info('Connected to okex websocket server')
+                timestamp = server_timestamp()
+                login_str = login_params(str(timestamp), api_key, passphrase, secret_key)
+                await ws.send(login_str)
+                login_res = await ws.recv()
+                self.logger.info('Login result: %s' % json.loads(inflate(login_res)))
 
-                await ws.send(json.dumps({"op": "subscribe", "args": ["option/instruments:BTC-USD"]}))
+                await ws.send(json.dumps({"op": "subscribe", "args": ["option/instruments:BTC-USD",
+                                                                      "option/account:BTC-USD"]}))
                 response = json.loads(inflate(await ws.recv()))
 
                 lastheartbeat = time.time()
@@ -60,7 +97,7 @@ class OkexMD(ServiceBase):
                             # self.logger.info(response['data'])
                             self.pubserver.send_string(json.dumps(response))
                     else:
-                        if time.time() - lastheartbeat > 60:
+                        if time.time() - lastheartbeat > 30:
                             raise websockets.exceptions.ConnectionClosedError(1003, 'Serverside heartbeat stopped')
                 else:
                     if self.state == ServiceState.started:
