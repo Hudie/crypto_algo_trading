@@ -20,17 +20,13 @@ QUOTE_GAP = (
     (0.005, 0.33, 7 * 24 * 3600),
     (0.008, 0.31, 15 * 24 *3600),
     (0.012, 0.3, 31 * 24 * 3600),
-    # (0.01, 1, 31 * 24 * 3600),
 )
-OKEX_BALANCE_THRESHOLD = 0.2		# keep 20% margin
-DERIBIT_BALANCE_THESHOLD = 0.2
 
 deribit_apikey = 'CRSy0R7z'
 deribit_apisecret = 'FmpNkWyh4NmiFzMMlietKjJiELnceMlSNvkkipEGGQQ'
 
 quotes = {}
-total_open_size = 0.2
-opened_size = 0
+available_size = 0
 
 
 class CatchGap(ServiceBase):
@@ -110,30 +106,22 @@ class CatchGap(ServiceBase):
         # trade at the other platform
         # check everything alright
         try:
-            global opened_size, total_open_size
-
-            '''
-            # check okex balance & deribit balance
-            okexbal = self.okexclient.get_account_info()
-            okexavail = max(float(okexbal.get('avail_margin', 0)) - float(okexbal.get('total_avail_balance', 0)) * OKEX_BALANCE_THRESHOLD, 0)
-            '''
+            global available_size
 
             if if_okex_sell:
                 size = min(
                     float(quote['okex'][1])/10,
                     quote['deribit'][3],
-                    total_open_size - opened_size,
-                    # okexavail / 0.1,
-                    # deriavail / quote['deribit'][2],
+                    available_size,
                 )
                 # long firstly, then short
                 if size >= 0.1:
-                    opened_size += size
+                    available_size -= size
                     self.logger.info('trade size: %f' % size)
                     res = self.deribittradingapi.private_buy_get(sym, size, price=quote['deribit'][2], time_in_force='immediate_or_cancel')
                     self.logger.info(res['result'])
                     filled_qty = res['result']['order']['filled_amount']
-                    opened_size -= size - filled_qty
+                    available_size += size - filled_qty
                     for price in (float(quote['okex'][0])-i*0.0005 for i in range(int((float(quote['okex'][0])-quote['deribit'][2])/0.0005))):
                         if filled_qty > 0:
                             ret = self.okexclient.order({'instrument_id': quote['oksym'],
@@ -143,7 +131,8 @@ class CatchGap(ServiceBase):
                             self.logger.info(ret)
                             if ret['error_code'] == '0' and ret['result'] == 'true':
                                 await asyncio.sleep(1)
-                                order_status = self.okexclient.get_order_status(ret['order_id'])
+                                order_id = ret['order_id']
+                                order_status = self.okexclient.get_order_status(order_id)
                                 self.logger.info(order_status)
                                 try:
                                     if order_status['state'] != '2':	# means not filled completely
@@ -159,13 +148,11 @@ class CatchGap(ServiceBase):
                 size = min(
                     float(quote['okex'][3])/10,
                     quote['deribit'][1],
-                    total_open_size - opened_size,
-                    # okexavail / float(quote['okex'][2]),
-                    # deriavail / 0.1,
+                    available_size,
                 )
 
                 if size >= 0.1:
-                    opened_size += size
+                    available_size -= size
                     self.logger.info('trade size: %f' % size)
                     ret = self.okexclient.order({'instrument_id': quote['oksym'],
                                                  'side': 'buy',
@@ -175,7 +162,7 @@ class CatchGap(ServiceBase):
                     self.logger.info(ret)
                     
                     if not (ret['error_code'] == '0' and ret['result'] == 'true'):
-                        opened_size -= size
+                        available_size += size
                     else:
                         order_id = ret['order_id']
                         order_status = self.okexclient.get_order_status(order_id)
@@ -189,7 +176,7 @@ class CatchGap(ServiceBase):
                             self.logger.info('failed to cancel order')
                             order_status = self.okexclient.get_order_status(order_id)
                         filled_qty = float(order_status.get('filled_qty', 0))/10
-                        opened_size -= size - filled_qty
+                        available_size += size - filled_qty
                         
                         if filled_qty > 0:
                             res = self.deribittradingapi.private_sell_get(sym, filled_qty, price=quote['deribit'][0], time_in_force='immediate_or_cancel')
@@ -223,6 +210,7 @@ class CatchGap(ServiceBase):
 
     async def sub_msg_okex(self):
         try:
+            global available_size
             while self.state == ServiceState.started:
                 msg = json.loads(await self.okexmsgclient.recv_string())
                 if msg['table'] == 'option/depth5':
@@ -237,6 +225,10 @@ class CatchGap(ServiceBase):
                     if quotes.setdefault(sym, {}).get('okex', []) != newrecord:
                         quotes[sym].update({'okex': newrecord, 'gapped': False, 'oksym': quote['instrument_id'], })
                         await self.find_quotes_gap(sym)
+                elif msg['table'] == 'option/account':
+                    accountinfo = msg['data'][0]
+                    available_size = int((float(accountinfo['margin_balance']) * 0.3 - float(accountinfo['maintenance_margin']))/0.015)/10.0
+                    # self.logger.info(available_size)
         except Exception as e:
             self.logger.exception(e)
                 

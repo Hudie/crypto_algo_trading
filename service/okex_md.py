@@ -93,7 +93,7 @@ class OkexMD(ServiceBase):
                             self.logger.info('Instruments updated')
                             await ws.send(json.dumps({"op": "subscribe",
                                                       "args": ["option/depth5:" + i['instrument_id'] for i in response['data']]}))
-                        elif response.get('table', '') == 'option/depth5':
+                        elif response.get('table', '') in ('option/depth5', 'option/account'):
                             # self.logger.info(response['data'])
                             self.pubserver.send_string(json.dumps(response))
                     else:
