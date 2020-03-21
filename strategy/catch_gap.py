@@ -12,14 +12,16 @@ import tornado
 import json
 import pickle
 import time
+import random
 
 
 
 QUOTE_GAP = (
     (0.003, 0.36, 3 * 24 * 3600),
-    (0.005, 0.33, 7 * 24 * 3600),
-    (0.008, 0.31, 15 * 24 *3600),
-    (0.012, 0.3, 31 * 24 * 3600),
+    (0.0045, 0.33, 6 * 24 * 3600),
+    (0.006, 0.32, 10 * 24 * 3600),
+    (0.0075, 0.31, 15 * 24 *3600),
+    (0.01, 0.3, 31 * 24 * 3600),
 )
 
 deribit_apikey = 'CRSy0R7z'
@@ -85,14 +87,14 @@ class CatchGap(ServiceBase):
                     if v['deribit'][0] and v['okex'][2]:
                         for (gap, d, t) in QUOTE_GAP:
                             if v['deribit'][0] - float(v['okex'][2]) >= gap and timedelta <= t and delta <= d:
-                                self.logger.info('%s -- gap: %.4f -- %s' %(sym, v['deribit'][0] - float(v['okex'][2]), str(v)))
+                                self.logger.info('%s -- gap: %.4f -- avail: %.1f -- %s' %(sym, v['deribit'][0] - float(v['okex'][2]), available_size, str(v)))
                                 v.update({'gapped': True, 'trading': True})
                                 asyncio.ensure_future(self.gap_trade(sym, v, False))
                                 break
                     if v['deribit'][2] and v['okex'][0]:
                         for (gap, d, t) in QUOTE_GAP:
                             if float(v['okex'][0]) - v['deribit'][2] >= gap and timedelta <= t and delta <= d:
-                                self.logger.info('%s -- gap: %.4f -- %s' %(sym, float(v['okex'][0]) - v['deribit'][2], str(v)))
+                                self.logger.info('%s -- gap: %.4f -- avail: %.1f -- %s' %(sym, float(v['okex'][0]) - v['deribit'][2], available_size, str(v)))
                                 v.update({'gapped': True, 'trading': True})
                                 asyncio.ensure_future(self.gap_trade(sym, v, True))
                                 break
@@ -121,6 +123,7 @@ class CatchGap(ServiceBase):
                     res = self.deribittradingapi.private_buy_get(sym, size, price=quote['deribit'][2], time_in_force='immediate_or_cancel')
                     self.logger.info(res['result'])
                     filled_qty = res['result']['order']['filled_amount']
+                    self.logger.info('filled quantity: %.1f' % filled_qty)
                     available_size += size - filled_qty
                     for price in (float(quote['okex'][0])-i*0.0005 for i in range(int((float(quote['okex'][0])-quote['deribit'][2])/0.0005))):
                         if filled_qty > 0:
@@ -176,6 +179,7 @@ class CatchGap(ServiceBase):
                             self.logger.info('failed to cancel order')
                             order_status = self.okexclient.get_order_status(order_id)
                         filled_qty = float(order_status.get('filled_qty', 0))/10
+                        self.logger.info('filled quantity: %.1f' % filled_qty)
                         available_size += size - filled_qty
                         
                         if filled_qty > 0:
@@ -227,8 +231,9 @@ class CatchGap(ServiceBase):
                         await self.find_quotes_gap(sym)
                 elif msg['table'] == 'option/account':
                     accountinfo = msg['data'][0]
-                    available_size = int((float(accountinfo['margin_balance']) * 0.3 - float(accountinfo['maintenance_margin']))/0.015)/10.0
-                    # self.logger.info(available_size)
+                    available_size = int((float(accountinfo['margin_balance']) * 0.33 - float(accountinfo['maintenance_margin']))/0.015)/10.0
+                    if random.randint(0, 99) % 30 == 0:
+                        self.logger.info('available contract size: %.1f' % available_size)
         except Exception as e:
             self.logger.exception(e)
                 

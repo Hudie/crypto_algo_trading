@@ -77,6 +77,8 @@ class OkexMD(ServiceBase):
                 await ws.send(json.dumps({"op": "subscribe", "args": ["option/instruments:BTC-USD",
                                                                       "option/account:BTC-USD"]}))
                 response = json.loads(inflate(await ws.recv()))
+                #await ws.send(json.dumps({"op": "subscribe", "args": ["option/account:BTC-USD"]}))
+                #response = json.loads(inflate(await ws.recv()))
 
                 lastheartbeat = time.time()
                 while ws.open and self.state == ServiceState.started:
