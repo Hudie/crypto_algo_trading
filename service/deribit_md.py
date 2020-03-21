@@ -42,6 +42,17 @@ subscribe = {
     }
 }
 
+MSG_PRIVATE_SUBSCRIBE_ID = 4235
+private_subscribe = {
+    "jsonrpc" : "2.0",
+    "id" : MSG_PRIVATE_SUBSCRIBE_ID,
+    "method" : "private/subscribe",
+    "params" : {
+        "channels" : [
+        ]
+    }
+}
+
 MSG_UNSUBSCRIBE_ID = 8691
 unsubscribe = {
     "jsonrpc" : "2.0",
@@ -102,6 +113,12 @@ class DeribitMD(ServiceBase):
                 # set heartbeats to keep alive
                 await websocket.send(json.dumps(heartbeat))
                 await websocket.recv()
+                # auth
+                auth['params']['client_id'] = 'CRSy0R7z'
+                auth['params']['client_secret'] = 'FmpNkWyh4NmiFzMMlietKjJiELnceMlSNvkkipEGGQQ'
+                await websocket.send(json.dumps(auth))
+                res = json.loads(await websocket.recv())
+                self.logger.info(res)
                 # get instruments and then update channels
                 await websocket.send(json.dumps(instruments))
                 response = json.loads(await websocket.recv())
@@ -112,6 +129,10 @@ class DeribitMD(ServiceBase):
                         activechannels.add('.'.join([j, i['instrument_name'], 'raw']))
                 subscribe['params']['channels'] = list(activechannels)
                 await websocket.send(json.dumps(subscribe))
+                res = json.loads(await websocket.recv())
+                private_subscribe['params']['channels'] = ['user.portfolio.BTC', ]
+                await websocket.send(json.dumps(private_subscribe))
+                
                 hourlyupdated = True
 
                 # it is very important here to use 'self.state' to control start/stop!!!
@@ -160,7 +181,7 @@ class DeribitMD(ServiceBase):
                                     self.pubserver.send_string(json.dumps({'type': 'instrument',
                                                                            'data': str(pickle.dumps(parse_deribit_instrument(i)))}))
                             activechannels = newchannels
-                    elif response.get('id', '') in (MSG_TEST_ID, MSG_SUBSCRIBE_ID, MSG_UNSUBSCRIBE_ID):
+                    elif response.get('id', '') in (MSG_TEST_ID, MSG_SUBSCRIBE_ID, MSG_UNSUBSCRIBE_ID, MSG_PRIVATE_SUBSCRIBE_ID):
                         pass
                     else:
                         # self.logger.info(str(response['params']['data']))
@@ -176,6 +197,11 @@ class DeribitMD(ServiceBase):
                             self.pubserver.send_string(
                                 json.dumps({'type': 'book',
                                             'data': str(pickle.dumps(parse_deribit_order_book(response['params']['data'])))}))
+                        elif response['params']['channel'].startswith('user.portfolio'):
+                            self.logger.info(response['params']['data'])
+                            self.pubserver.send_string(
+                                json.dumps({'type': 'user.portfolio',
+                                            'data': str(pickle.dumps(response['params']['data']))}))
                         else:
                             pass
                 else:
