@@ -198,7 +198,7 @@ class DeribitMD(ServiceBase):
                                 json.dumps({'type': 'book',
                                             'data': str(pickle.dumps(parse_deribit_order_book(response['params']['data'])))}))
                         elif response['params']['channel'].startswith('user.portfolio'):
-                            self.logger.info(response['params']['data'])
+                            # self.logger.info(response['params']['data'])
                             self.pubserver.send_string(
                                 json.dumps({'type': 'user.portfolio',
                                             'data': str(pickle.dumps(response['params']['data']))}))

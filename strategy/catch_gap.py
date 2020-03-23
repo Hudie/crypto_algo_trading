@@ -16,6 +16,7 @@ import random
 
 
 
+RISK_RATIO = 2.75
 QUOTE_GAP = (
     (0.003, 0.36, 3 * 24 * 3600),
     (0.0045, 0.33, 6 * 24 * 3600),
@@ -28,7 +29,9 @@ deribit_apikey = 'CRSy0R7z'
 deribit_apisecret = 'FmpNkWyh4NmiFzMMlietKjJiELnceMlSNvkkipEGGQQ'
 
 quotes = {}
-available_size = 0
+locked_size = 0
+deribit_balance = [0, 0, 0]	# equity, initial_margin, maintenance_margin
+okex_balance = [0, 0, 0]
 
 
 class CatchGap(ServiceBase):
@@ -76,6 +79,7 @@ class CatchGap(ServiceBase):
 
     async def find_quotes_gap(self, sym):
         try:
+            global deribit_balance, okex_balance
             v = quotes[sym]
             if all(( not v.get('gapped', False),
                      not v.get('trading', False),
@@ -87,14 +91,16 @@ class CatchGap(ServiceBase):
                     if v['deribit'][0] and v['okex'][2]:
                         for (gap, d, t) in QUOTE_GAP:
                             if v['deribit'][0] - float(v['okex'][2]) >= gap and timedelta <= t and delta <= d:
-                                self.logger.info('%s -- gap: %.4f -- avail: %.1f -- %s' %(sym, v['deribit'][0] - float(v['okex'][2]), available_size, str(v)))
+                                self.logger.info('%s -- gap: %.4f -- %s' %(sym, v['deribit'][0] - float(v['okex'][2]), str(v)))
+                                self.logger.info('deribit balance: %s, okex balance: %s' %(str(deribit_balance), str(okex_balance)))
                                 v.update({'gapped': True, 'trading': True})
                                 asyncio.ensure_future(self.gap_trade(sym, v, False))
                                 break
                     if v['deribit'][2] and v['okex'][0]:
                         for (gap, d, t) in QUOTE_GAP:
                             if float(v['okex'][0]) - v['deribit'][2] >= gap and timedelta <= t and delta <= d:
-                                self.logger.info('%s -- gap: %.4f -- avail: %.1f -- %s' %(sym, float(v['okex'][0]) - v['deribit'][2], available_size, str(v)))
+                                self.logger.info('%s -- gap: %.4f -- %s' %(sym, float(v['okex'][0]) - v['deribit'][2], str(v)))
+                                self.logger.info('deribit balance: %s, okex balance: %s' %(str(deribit_balance), str(okex_balance)))
                                 v.update({'gapped': True, 'trading': True})
                                 asyncio.ensure_future(self.gap_trade(sym, v, True))
                                 break
@@ -108,23 +114,25 @@ class CatchGap(ServiceBase):
         # trade at the other platform
         # check everything alright
         try:
-            global available_size
+            global locked_size, deribit_balance, okex_balance
 
             if if_okex_sell:
                 size = min(
                     float(quote['okex'][1])/10,
                     quote['deribit'][3],
-                    available_size,
-                )
+                    int(max(0, okex_balance[0] / RISK_RATIO - okex_balance[2])/0.15*10)/10.0,
+                    int(max(deribit[0] - deribit[2] * RISK_RATIO, 0)/quote['deribit'][2]*10)/10.0,
+                ) - locked_size
+                
                 # long firstly, then short
                 if size >= 0.1:
-                    available_size -= size
+                    locked_size += size
                     self.logger.info('trade size: %f' % size)
                     res = self.deribittradingapi.private_buy_get(sym, size, price=quote['deribit'][2], time_in_force='immediate_or_cancel')
                     self.logger.info(res['result'])
                     filled_qty = res['result']['order']['filled_amount']
                     self.logger.info('filled quantity: %.1f' % filled_qty)
-                    available_size += size - filled_qty
+                    locked_size -= size - filled_qty
                     for price in (float(quote['okex'][0])-i*0.0005 for i in range(int((float(quote['okex'][0])-quote['deribit'][2])/0.0005))):
                         if filled_qty > 0:
                             ret = self.okexclient.order({'instrument_id': quote['oksym'],
@@ -151,11 +159,12 @@ class CatchGap(ServiceBase):
                 size = min(
                     float(quote['okex'][3])/10,
                     quote['deribit'][1],
-                    available_size,
-                )
+                    int(max(0, okex_balance[0] - okex_balance[2] * RISK_RATIO)/float(quote['okex'][2])*10)/10.0,
+                    int(max(deribit[0] / RISK_RATIO - deribit[2], 0)/0.15*10)/10.0,
+                ) - locked_size
 
                 if size >= 0.1:
-                    available_size -= size
+                    locked_size += size
                     self.logger.info('trade size: %f' % size)
                     ret = self.okexclient.order({'instrument_id': quote['oksym'],
                                                  'side': 'buy',
@@ -165,7 +174,7 @@ class CatchGap(ServiceBase):
                     self.logger.info(ret)
                     
                     if not (ret['error_code'] == '0' and ret['result'] == 'true'):
-                        available_size += size
+                        locked_size -= size
                     else:
                         order_id = ret['order_id']
                         order_status = self.okexclient.get_order_status(order_id)
@@ -180,7 +189,7 @@ class CatchGap(ServiceBase):
                             order_status = self.okexclient.get_order_status(order_id)
                         filled_qty = float(order_status.get('filled_qty', 0))/10
                         self.logger.info('filled quantity: %.1f' % filled_qty)
-                        available_size += size - filled_qty
+                        locked_size -= size - filled_qty
                         
                         if filled_qty > 0:
                             res = self.deribittradingapi.private_sell_get(sym, filled_qty, price=quote['deribit'][0], time_in_force='immediate_or_cancel')
@@ -200,6 +209,7 @@ class CatchGap(ServiceBase):
 
     async def sub_msg_deribit(self):
         try:
+            global deribit_balance, okex_balance
             while self.state == ServiceState.started:
                 msg = json.loads(await self.deribitmsgclient.recv_string())
                 if msg['type'] == 'quote':
@@ -209,12 +219,17 @@ class CatchGap(ServiceBase):
                         quotes[quote['sym']].update({'deribit': newrecord, 'gapped': False, 'index_price': quote['index_price'],
                                                      'mark_price': quote['mark_price'], 'delta': quote['delta'], })
                         await self.find_quotes_gap(quote['sym'])
+                elif msg['type'] == 'user.portfolio':
+                    portfolio = pickle.loads(eval(msg['data']))
+                    # self.logger.info(portfolio)
+                    # self.logger.info('deribit balance: %s, okex balance: %s' %(str(deribit_balance), str(okex_balance)) )
+                    deribit_balance = [portfolio['equity'], portfolio['initial_margin'], portfolio['maintenance_margin']]
         except Exception as e:
             self.logger.exception(e)
 
     async def sub_msg_okex(self):
         try:
-            global available_size
+            global deribit_balance, okex_balance
             while self.state == ServiceState.started:
                 msg = json.loads(await self.okexmsgclient.recv_string())
                 if msg['table'] == 'option/depth5':
@@ -231,9 +246,12 @@ class CatchGap(ServiceBase):
                         await self.find_quotes_gap(sym)
                 elif msg['table'] == 'option/account':
                     accountinfo = msg['data'][0]
-                    available_size = int((float(accountinfo['margin_balance']) * 0.33 - float(accountinfo['maintenance_margin']))/0.015)/10.0
+                    # self.logger.info(accountinfo)
+                    okex_balance = [float(accountinfo['margin_balance']),
+                                    float(accountinfo['margin_for_unfilled']) + float(accountinfo['margin_frozen']),
+                                    float(accountinfo['maintenance_margin'])]
                     if random.randint(0, 99) % 30 == 0:
-                        self.logger.info('available contract size: %.1f' % available_size)
+                        self.logger.info('deribit balance: %s, okex balance: %s' %(str(deribit_balance), str(okex_balance)) )
         except Exception as e:
             self.logger.exception(e)
                 
