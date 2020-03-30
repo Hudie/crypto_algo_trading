@@ -94,8 +94,9 @@ class OkexMD(ServiceBase):
                         if response.get('table', '') == 'option/instruments':
                             self.logger.info('Instruments updated')
                             await ws.send(json.dumps({"op": "subscribe",
-                                                      "args": ["option/depth5:" + i['instrument_id'] for i in response['data']]}))
-                        elif response.get('table', '') in ('option/depth5', 'option/account'):
+                                                      "args": ["option/depth5:" + i['instrument_id'] for i in response['data']]
+                                                      + ["option/trade:" + i['instrument_id'] for i in response['data']]}))
+                        elif response.get('table', '') in ('option/depth5', 'option/account', 'option/trade'):
                             # self.logger.info(response['data'])
                             self.pubserver.send_string(json.dumps(response))
                     else:

@@ -18,15 +18,15 @@ import random
 
 RISK_RATIO = 2.75
 QUOTE_GAP = (
-    (0.0035, 0.36, 3 * 24 * 3600),
-    (0.005, 0.33, 6 * 24 * 3600),
-    (0.0065, 0.32, 10 * 24 * 3600),
-    (0.008, 0.31, 15 * 24 *3600),
-    (0.0105, 0.3, 31 * 24 * 3600),
+    (0.001, 0.36, 3 * 24 * 3600),
+    (0.0035, 0.33, 6 * 24 * 3600),
+    (0.005, 0.32, 10 * 24 * 3600),
+    (0.0065, 0.31, 15 * 24 *3600),
+    (0.008, 0.3, 31 * 24 * 3600),
 )
 
-deribit_apikey = 'CRSy0R7z'
-deribit_apisecret = 'FmpNkWyh4NmiFzMMlietKjJiELnceMlSNvkkipEGGQQ'
+deribit_apikey = 'PmyJIl5T'
+deribit_apisecret = '7WBI4N_YT8YB5nAFq1VjPFedLMxGfrxxCbreMFOYLv0'
 
 quotes = {}
 locked_size = 0
@@ -88,19 +88,21 @@ class CatchGap(ServiceBase):
                 timedelta = time.mktime(time.strptime(sym.split('-')[1], '%d%b%y')) - time.time()
                 delta = abs(v.get('delta', 1))
                 if 'deribit' in v.keys() and 'okex' in v.keys():
-                    if v['deribit'][0] and v['okex'][0]:
+                    if v['deribit'][0] and v['okex'][2]:
                         for (gap, d, t) in QUOTE_GAP:
-                            if abs(v['deribit'][0] - float(v['okex'][0])) >= gap and timedelta <= t and delta <= d:
-                                self.logger.info('%s -- gap: %.4f -- %s' %(sym, v['deribit'][0] - float(v['okex'][0]), str(v)))
-                                #v.update({'gapped': True, 'trading': True})
-                                #asyncio.ensure_future(self.gap_trade(sym, v, False))
+                            if v['deribit'][0] - float(v['okex'][2]) >= gap and timedelta <= t and delta <= d:
+                                self.logger.info('%s -- gap: %.4f -- %s' %(sym, v['deribit'][0] - float(v['okex'][2]), str(v)))
+                                self.logger.info('deribit balance: %s, okex balance: %s' %(str(deribit_balance), str(okex_balance)))
+                                v.update({'gapped': True, 'trading': True})
+                                asyncio.ensure_future(self.gap_trade(sym, v, False))
                                 break
-                    if v['deribit'][2] and v['okex'][2]:
+                    if v['deribit'][2] and v['okex'][0]:
                         for (gap, d, t) in QUOTE_GAP:
-                            if abs(float(v['okex'][2]) - v['deribit'][2]) >= gap and timedelta <= t and delta <= d:
-                                self.logger.info('%s -- gap: %.4f -- %s' %(sym, float(v['okex'][2]) - v['deribit'][2], str(v)))
-                                #v.update({'gapped': True, 'trading': True})
-                                #asyncio.ensure_future(self.gap_trade(sym, v, True))
+                            if float(v['okex'][0]) - v['deribit'][2] >= gap and timedelta <= t and delta <= d:
+                                self.logger.info('%s -- gap: %.4f -- %s' %(sym, float(v['okex'][0]) - v['deribit'][2], str(v)))
+                                self.logger.info('deribit balance: %s, okex balance: %s' %(str(deribit_balance), str(okex_balance)))
+                                v.update({'gapped': True, 'trading': True})
+                                asyncio.ensure_future(self.gap_trade(sym, v, True))
                                 break
         except Exception as e:
             self.logger.exception(e)
@@ -118,8 +120,8 @@ class CatchGap(ServiceBase):
                 size = min(
                     float(quote['okex'][1])/10,
                     quote['deribit'][3],
-                    int(max(0, okex_balance[0] / RISK_RATIO - okex_balance[2])/0.15*10)/10.0,
-                    int(max(deribit[0] - deribit[2] * RISK_RATIO, 0)/quote['deribit'][2]*10)/10.0,
+                    int(max(0, okex_balance[0]/RISK_RATIO-okex_balance[2], okex_balance[0]-okex_balance[1])/0.15*10)/10.0,
+                    int(max(0, deribit[0]-deribit[2]*RISK_RATIO, deribit[0]-deribit[1])/quote['deribit'][2]*10)/10.0,
                 ) - locked_size
                 
                 # long firstly, then short
@@ -157,8 +159,8 @@ class CatchGap(ServiceBase):
                 size = min(
                     float(quote['okex'][3])/10,
                     quote['deribit'][1],
-                    int(max(0, okex_balance[0] - okex_balance[2] * RISK_RATIO)/float(quote['okex'][2])*10)/10.0,
-                    int(max(deribit[0] / RISK_RATIO - deribit[2], 0)/0.15*10)/10.0,
+                    int(max(0, okex_balance[0]-okex_balance[2]*RISK_RATIO, okex_balance[0]-okex_balance[1])/float(quote['okex'][2])*10)/10.0,
+                    int(max(0, deribit[0]/RISK_RATIO-deribit[2], deribit[0]-deribit[1])/0.15*10)/10.0,
                 ) - locked_size
 
                 if size >= 0.1:
@@ -212,13 +214,31 @@ class CatchGap(ServiceBase):
                 msg = json.loads(await self.deribitmsgclient.recv_string())
                 if msg['type'] == 'quote':
                     quote = pickle.loads(eval(msg['data']))
+                    # self.logger.info(quote)
                     newrecord = [quote['bid_prices'][0], quote['bid_sizes'][0], quote['ask_prices'][0], quote['ask_sizes'][0]]
                     if quotes.setdefault(quote['sym'], {}).get('deribit', []) != newrecord:
                         quotes[quote['sym']].update({'deribit': newrecord, 'gapped': False, 'index_price': quote['index_price'],
                                                      'mark_price': quote['mark_price'], 'delta': quote['delta'], })
-                        await self.find_quotes_gap(quote['sym'])
+                        # await self.find_quotes_gap(quote['sym'])
+                elif msg['type'] == 'trade':
+                    trade = pickle.loads(eval(msg['data']))
+                    sym = trade['sym']
+                    quote = quotes.get(sym, {})
+                    for i in QUOTE_GAP:
+                        if all((time.mktime(time.strptime(sym.split('-')[1], '%d%b%y')) - time.time() < i[2],
+                                # sym[-1] == 'C',
+                                quote.get('delta', 1) < i[1],
+                                quote.get('okex', {}),
+                        )):
+                            if any((trade['direction'] == 1 and trade['price'] - float(quote['okex'][2] or 1) >= i[0],
+                                    trade['direction'] == -1 and float(quote['okex'][0] or 0) - trade['price'] >= i[0])):
+                                self.logger.info('=====================================================================')
+                                self.logger.info('deribit trade: %s' % str(trade))
+                                self.logger.info(quote)
                 elif msg['type'] == 'user.portfolio':
                     portfolio = pickle.loads(eval(msg['data']))
+                    # self.logger.info(portfolio)
+                    # self.logger.info('deribit balance: %s, okex balance: %s' %(str(deribit_balance), str(okex_balance)) )
                     deribit_balance = [portfolio['equity'], portfolio['initial_margin'], portfolio['maintenance_margin']]
         except Exception as e:
             self.logger.exception(e)
@@ -228,25 +248,40 @@ class CatchGap(ServiceBase):
             global deribit_balance, okex_balance
             while self.state == ServiceState.started:
                 msg = json.loads(await self.okexmsgclient.recv_string())
+                data = msg['data'][0]
                 if msg['table'] == 'option/depth5':
-                    quote = msg['data'][0]
-                    tmp = quote['instrument_id'].split('-')
+                    tmp = data['instrument_id'].split('-')
                     sym = '-'.join([tmp[0], time.strftime('%d%b%y', time.strptime(tmp[2], '%y%m%d')).upper(),
                                     tmp[3], tmp[4]])
-                    newrecord = [quote['bids'][0][0] if len(quote['bids']) > 0 else None,
-                                 quote['bids'][0][1] if len(quote['bids']) > 0 else None,
-                                 quote['asks'][0][0] if len(quote['asks']) > 0 else None,
-                                 quote['asks'][0][1] if len(quote['asks']) > 0 else None]
+                    newrecord = [data['bids'][0][0] if len(data['bids']) > 0 else None,
+                                 data['bids'][0][1] if len(data['bids']) > 0 else None,
+                                 data['asks'][0][0] if len(data['asks']) > 0 else None,
+                                 data['asks'][0][1] if len(data['asks']) > 0 else None]
                     if quotes.setdefault(sym, {}).get('okex', []) != newrecord:
-                        quotes[sym].update({'okex': newrecord, 'gapped': False, 'oksym': quote['instrument_id'], })
-                        await self.find_quotes_gap(sym)
+                        quotes[sym].update({'okex': newrecord, 'gapped': False, 'oksym': data['instrument_id'], })
+                        # await self.find_quotes_gap(sym)
+                elif msg['table'] == 'option/trade':
+                    tmp = data['instrument_id'].split('-')
+                    sym = '-'.join([tmp[0], time.strftime('%d%b%y', time.strptime(tmp[2], '%y%m%d')).upper(),
+                                    tmp[3], tmp[4]])
+                    quote = quotes.get(sym, {})
+                    for i in QUOTE_GAP:
+                        if all((time.mktime(time.strptime(sym.split('-')[1], '%d%b%y')) - time.time() < i[2],
+                                # sym[-1] == 'C',
+                                quote.get('delta', 1) < i[1],
+                                quote.get('deribit', {}),
+                        )):
+                            if any((data['side'] == 'buy' and float(data['price']) - (quote['deribit'][2] or 1) >= i[0],
+                                    data['side'] == 'sell' and (quote['deribit'][0] or 0) - float(data['price']) >= i[0])):
+                                self.logger.info('---------------------------------------------------------------------')
+                                self.logger.info('okex trade: %s' % str(data))
+                                self.logger.info(quote)
                 elif msg['table'] == 'option/account':
-                    accountinfo = msg['data'][0]
-                    okex_balance = [float(accountinfo['margin_balance']),
-                                    float(accountinfo['margin_for_unfilled']) + float(accountinfo['margin_frozen']),
-                                    float(accountinfo['maintenance_margin'])]
-                    # if random.randint(0, 99) % 30 == 0:
-                    #     self.logger.info('deribit balance: %s, okex balance: %s' %(str(deribit_balance), str(okex_balance)) )
+                    okex_balance = [float(data['margin_balance']),
+                                    float(data['margin_for_unfilled']) + float(data['margin_frozen']),
+                                    float(data['maintenance_margin'])]
+                    if random.randint(0, 99) % 30 == 0:
+                        self.logger.info('deribit : %s, okex : %s' %(str(deribit_balance), str(okex_balance)) )
         except Exception as e:
             self.logger.exception(e)
                 
@@ -255,11 +290,12 @@ class CatchGap(ServiceBase):
             self.logger.error('tried to run service, but state is %s' % self.state)
         else:
             self.state = ServiceState.started
+            # await self.sub_msg()
             asyncio.ensure_future(self.sub_msg_deribit())
             asyncio.ensure_future(self.sub_msg_okex())
             asyncio.ensure_future(self.refresh_token())
 
     
 if __name__ == '__main__':
-    service = CatchGap('catch_gap_onsameside')
+    service = CatchGap('trade')
     start_service(service, {})

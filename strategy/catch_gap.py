@@ -25,8 +25,8 @@ QUOTE_GAP = (
     (0.01, 0.3, 31 * 24 * 3600),
 )
 
-deribit_apikey = 'CRSy0R7z'
-deribit_apisecret = 'FmpNkWyh4NmiFzMMlietKjJiELnceMlSNvkkipEGGQQ'
+deribit_apikey = 'PmyJIl5T'
+deribit_apisecret = '7WBI4N_YT8YB5nAFq1VjPFedLMxGfrxxCbreMFOYLv0'
 
 quotes = {}
 locked_size = 0
@@ -120,8 +120,8 @@ class CatchGap(ServiceBase):
                 size = min(
                     float(quote['okex'][1])/10,
                     quote['deribit'][3],
-                    int(max(0, okex_balance[0] / RISK_RATIO - okex_balance[2])/0.15*10)/10.0,
-                    int(max(deribit[0] - deribit[2] * RISK_RATIO, 0)/quote['deribit'][2]*10)/10.0,
+                    int(max(0, okex_balance[0]/RISK_RATIO-okex_balance[2], okex_balance[0]-okex_balance[1])/0.15*10)/10.0,
+                    int(max(0, deribit[0]-deribit[2]*RISK_RATIO, deribit[0]-deribit[1])/quote['deribit'][2]*10)/10.0,
                 ) - locked_size
                 
                 # long firstly, then short
@@ -159,8 +159,8 @@ class CatchGap(ServiceBase):
                 size = min(
                     float(quote['okex'][3])/10,
                     quote['deribit'][1],
-                    int(max(0, okex_balance[0] - okex_balance[2] * RISK_RATIO)/float(quote['okex'][2])*10)/10.0,
-                    int(max(deribit[0] / RISK_RATIO - deribit[2], 0)/0.15*10)/10.0,
+                    int(max(0, okex_balance[0]-okex_balance[2]*RISK_RATIO, okex_balance[0]-okex_balance[1])/float(quote['okex'][2])*10)/10.0,
+                    int(max(0, deribit[0]/RISK_RATIO-deribit[2], deribit[0]-deribit[1])/0.15*10)/10.0,
                 ) - locked_size
 
                 if size >= 0.1:
