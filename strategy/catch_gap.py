@@ -17,6 +17,7 @@ import random
 
 
 RISK_RATIO = 2
+MAX_SIZE_PER_TRADE = 3
 QUOTE_GAP = (
     (0.003, 0.36, 3 * 24 * 3600),
     (0.0045, 0.33, 6 * 24 * 3600),
@@ -119,12 +120,12 @@ class CatchGap(ServiceBase):
             global locked_size, deribit_balance, okex_balance
 
             if if_okex_sell:
-                size = min(
+                size = min( min(
                     float(quote['okex'][1])/10,
                     quote['deribit'][3],
                     int(max(0, okex_balance[0]/RISK_RATIO-okex_balance[2], okex_balance[0]-okex_balance[1])/0.15*10)/10.0,
                     int(max(0, deribit_balance[0]-deribit_balance[2]*RISK_RATIO, deribit_balance[0]-deribit_balance[1])/quote['deribit'][2]*10)/10.0,
-                ) - locked_size
+                ) - locked_size, MAX_SIZE_PER_TRADE)
                 
                 # long firstly, then short
                 if size >= 0.1:
@@ -158,12 +159,12 @@ class CatchGap(ServiceBase):
                         else:
                             break
             else:
-                size = min(
+                size = min( min(
                     float(quote['okex'][3])/10,
                     quote['deribit'][1],
                     int(max(0, okex_balance[0]-okex_balance[2]*RISK_RATIO, okex_balance[0]-okex_balance[1])/float(quote['okex'][2])*10)/10.0,
                     int(max(0, deribit_balance[0]/RISK_RATIO-deribit_balance[2], deribit_balance[0]-deribit_balance[1])/0.15*10)/10.0,
-                ) - locked_size
+                ) - locked_size, MAX_SIZE_PER_TRADE)
 
                 if size >= 0.1:
                     locked_size += size
