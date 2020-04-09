@@ -114,11 +114,11 @@ class DeribitMD(ServiceBase):
                 await websocket.send(json.dumps(heartbeat))
                 await websocket.recv()
                 # auth
-                auth['params']['client_id'] = 'CRSy0R7z'
-                auth['params']['client_secret'] = 'FmpNkWyh4NmiFzMMlietKjJiELnceMlSNvkkipEGGQQ'
+                # auth['params']['client_id'] = 'PmyJIl5T'
+                # auth['params']['client_secret'] = '7WBI4N_YT8YB5nAFq1VjPFedLMxGfrxxCbreMFOYLv0'
                 await websocket.send(json.dumps(auth))
                 res = json.loads(await websocket.recv())
-                self.logger.info(res)
+                # self.logger.info(res)
                 # get instruments and then update channels
                 await websocket.send(json.dumps(instruments))
                 response = json.loads(await websocket.recv())

@@ -273,15 +273,15 @@ class CatchGap(ServiceBase):
                         )):
                             if any((data['side'] == 'buy' and float(data['price']) - (quote['deribit'][2] or 1) >= i[0],
                                     data['side'] == 'sell' and (quote['deribit'][0] or 0) - float(data['price']) >= i[0])):
-                                self.logger.info('---------------------------------------------------------------------')
+                                self.logger.info('=====================================================================')
                                 self.logger.info('okex trade: %s' % str(data))
                                 self.logger.info(quote)
                 elif msg['table'] == 'option/account':
                     okex_balance = [float(data['margin_balance']),
                                     float(data['margin_for_unfilled']) + float(data['margin_frozen']),
                                     float(data['maintenance_margin'])]
-                    if random.randint(0, 99) % 30 == 0:
-                        self.logger.info('deribit : %s, okex : %s' %(str(deribit_balance), str(okex_balance)) )
+                    #if random.randint(0, 99) % 30 == 0:
+                    #    self.logger.info('deribit : %s, okex : %s' %(str(deribit_balance), str(okex_balance)) )
         except Exception as e:
             self.logger.exception(e)
                 
@@ -297,5 +297,5 @@ class CatchGap(ServiceBase):
 
     
 if __name__ == '__main__':
-    service = CatchGap('trade')
+    service = CatchGap('catch-gap-trade')
     start_service(service, {})

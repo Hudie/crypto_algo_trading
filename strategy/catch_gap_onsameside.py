@@ -18,15 +18,15 @@ import random
 
 RISK_RATIO = 2.75
 QUOTE_GAP = (
-    (0.0035, 0.36, 3 * 24 * 3600),
-    (0.005, 0.33, 6 * 24 * 3600),
-    (0.0065, 0.32, 10 * 24 * 3600),
-    (0.008, 0.31, 15 * 24 *3600),
-    (0.0105, 0.3, 31 * 24 * 3600),
+    (0.0025, 0.36, 3 * 24 * 3600),
+    (0.004, 0.33, 6 * 24 * 3600),
+    (0.0055, 0.32, 10 * 24 * 3600),
+    (0.007, 0.31, 15 * 24 *3600),
+    (0.009, 0.3, 31 * 24 * 3600),
 )
 
-deribit_apikey = 'CRSy0R7z'
-deribit_apisecret = 'FmpNkWyh4NmiFzMMlietKjJiELnceMlSNvkkipEGGQQ'
+deribit_apikey = 'PmyJIl5T'
+deribit_apisecret = '7WBI4N_YT8YB5nAFq1VjPFedLMxGfrxxCbreMFOYLv0'
 
 quotes = {}
 locked_size = 0
@@ -88,20 +88,25 @@ class CatchGap(ServiceBase):
                 timedelta = time.mktime(time.strptime(sym.split('-')[1], '%d%b%y')) - time.time()
                 delta = abs(v.get('delta', 1))
                 if 'deribit' in v.keys() and 'okex' in v.keys():
-                    if v['deribit'][0] and v['okex'][0]:
-                        for (gap, d, t) in QUOTE_GAP:
-                            if abs(v['deribit'][0] - float(v['okex'][0])) >= gap and timedelta <= t and delta <= d:
-                                self.logger.info('%s -- gap: %.4f -- %s' %(sym, v['deribit'][0] - float(v['okex'][0]), str(v)))
-                                #v.update({'gapped': True, 'trading': True})
-                                #asyncio.ensure_future(self.gap_trade(sym, v, False))
-                                break
-                    if v['deribit'][2] and v['okex'][2]:
-                        for (gap, d, t) in QUOTE_GAP:
-                            if abs(float(v['okex'][2]) - v['deribit'][2]) >= gap and timedelta <= t and delta <= d:
-                                self.logger.info('%s -- gap: %.4f -- %s' %(sym, float(v['okex'][2]) - v['deribit'][2], str(v)))
-                                #v.update({'gapped': True, 'trading': True})
-                                #asyncio.ensure_future(self.gap_trade(sym, v, True))
-                                break
+                    if all(( (v['deribit'][2] or 1) - (v['deribit'][0] or 0) <= 0.01,
+                             float(v['okex'][2] or 1) - float(v['okex'][0] or 0) <= 0.01,
+                    )):
+                        if v['deribit'][0] and v['okex'][0]:
+                            for (gap, d, t) in QUOTE_GAP:
+                                if abs(v['deribit'][0] - float(v['okex'][0])) >= gap and timedelta <= t and delta <= d:
+                                    self.logger.info('---------------------------------------------------------------------')
+                                    self.logger.info('%s -- gap: %.4f -- %s' %(sym, v['deribit'][0] - float(v['okex'][0]), str(v)))
+                                    #v.update({'gapped': True, 'trading': True})
+                                    #asyncio.ensure_future(self.gap_trade(sym, v, False))
+                                    break
+                        if v['deribit'][2] and v['okex'][2]:
+                            for (gap, d, t) in QUOTE_GAP:
+                                if abs(float(v['okex'][2]) - v['deribit'][2]) >= gap and timedelta <= t and delta <= d:
+                                    self.logger.info('---------------------------------------------------------------------')
+                                    self.logger.info('%s -- gap: %.4f -- %s' %(sym, float(v['okex'][2]) - v['deribit'][2], str(v)))
+                                    #v.update({'gapped': True, 'trading': True})
+                                    #asyncio.ensure_future(self.gap_trade(sym, v, True))
+                                    break
         except Exception as e:
             self.logger.exception(e)
 
@@ -245,8 +250,8 @@ class CatchGap(ServiceBase):
                     okex_balance = [float(accountinfo['margin_balance']),
                                     float(accountinfo['margin_for_unfilled']) + float(accountinfo['margin_frozen']),
                                     float(accountinfo['maintenance_margin'])]
-                    # if random.randint(0, 99) % 30 == 0:
-                    #     self.logger.info('deribit balance: %s, okex balance: %s' %(str(deribit_balance), str(okex_balance)) )
+                    #if random.randint(0, 99) % 30 == 0:
+                    #    self.logger.info('deribit: %s, okex: %s' %(str(deribit_balance), str(okex_balance)) )
         except Exception as e:
             self.logger.exception(e)
                 
@@ -261,5 +266,5 @@ class CatchGap(ServiceBase):
 
     
 if __name__ == '__main__':
-    service = CatchGap('catch_gap_onsameside')
+    service = CatchGap('onsameside')
     start_service(service, {})
