@@ -13,17 +13,27 @@ import json
 import pickle
 import time
 import random
+import copy
 
 
 
 RISK_RATIO = 2
 MAX_SIZE_PER_TRADE = 3
+'''
 QUOTE_GAP = (
     (0.003, 0.36, 3 * 24 * 3600),
     (0.0045, 0.33, 6 * 24 * 3600),
     (0.006, 0.32, 10 * 24 * 3600),
     (0.0075, 0.31, 15 * 24 *3600),
     (0.01, 0.3, 31 * 24 * 3600),
+)
+'''
+QUOTE_GAP = (
+    (0.0025, 0.36, 3 * 24 * 3600),
+    (0.004, 0.33, 6 * 24 * 3600),
+    (0.0055, 0.32, 10 * 24 * 3600),
+    (0.007, 0.31, 15 * 24 *3600),
+    (0.009, 0.3, 31 * 24 * 3600),
 )
 
 deribit_apikey = 'PmyJIl5T'
@@ -96,7 +106,7 @@ class CatchGap(ServiceBase):
                                 self.logger.info('%s -- gap: %.4f -- %s' %(sym, v['deribit'][0] - float(v['okex'][2]), str(v)))
                                 self.logger.info('deribit: %s, okex: %s' %(str(deribit_balance), str(okex_balance)))
                                 v.update({'gapped': True, 'trading': True})
-                                asyncio.ensure_future(self.gap_trade(sym, v, False))
+                                asyncio.ensure_future(self.gap_trade(sym, copy.copy(v), False))
                                 break
                     if v['deribit'][2] and v['okex'][0]:
                         for (gap, d, t) in QUOTE_GAP:
@@ -105,7 +115,7 @@ class CatchGap(ServiceBase):
                                 self.logger.info('%s -- gap: %.4f -- %s' %(sym, float(v['okex'][0]) - v['deribit'][2], str(v)))
                                 self.logger.info('deribit: %s, okex: %s' %(str(deribit_balance), str(okex_balance)))
                                 v.update({'gapped': True, 'trading': True})
-                                asyncio.ensure_future(self.gap_trade(sym, v, True))
+                                asyncio.ensure_future(self.gap_trade(sym, copy.copy(v), True))
                                 break
         except Exception as e:
             self.logger.exception(e)
@@ -142,9 +152,10 @@ class CatchGap(ServiceBase):
                                                          'side': 'sell',
                                                          'price': str(price),
                                                          'size': str(int(filled_qty * 10)), })
+                            self.logger.info('okex sell at price %.4f with size %.1f' % (price, filled_qty))
                             self.logger.info(ret)
                             if ret['error_code'] == '0' and ret['result'] == 'true':
-                                await asyncio.sleep(1)
+                                # await asyncio.sleep(1)
                                 order_id = ret['order_id']
                                 order_status = self.okexclient.get_order_status(order_id)
                                 self.logger.info(order_status)
