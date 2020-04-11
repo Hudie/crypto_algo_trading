@@ -13,10 +13,12 @@ import json
 import pickle
 import time
 import random
+import copy
 
 
 
-RISK_RATIO = 2.75
+RISK_RATIO = 2
+MAX_SIZE_PER_TRADE = 1
 QUOTE_GAP = (
     (0.002, 0.36, 3 * 24 * 3600),
     (0.0035, 0.33, 6 * 24 * 3600),
@@ -121,7 +123,7 @@ class CatchGap(ServiceBase):
                     float(quote['okex'][1])/10,
                     quote['deribit'][3],
                     int(max(0, okex_balance[0]/RISK_RATIO-okex_balance[2], okex_balance[0]-okex_balance[1])/0.15*10)/10.0,
-                    int(max(0, deribit[0]-deribit[2]*RISK_RATIO, deribit[0]-deribit[1])/quote['deribit'][2]*10)/10.0,
+                    int(max(0, deribit_balance[0]-deribit_balance[2]*RISK_RATIO, deribit_balance[0]-deribit_balance[1])/quote['deribit'][2]*10)/10.0,
                 ) - locked_size
                 
                 # long firstly, then short
@@ -160,7 +162,7 @@ class CatchGap(ServiceBase):
                     float(quote['okex'][3])/10,
                     quote['deribit'][1],
                     int(max(0, okex_balance[0]-okex_balance[2]*RISK_RATIO, okex_balance[0]-okex_balance[1])/float(quote['okex'][2])*10)/10.0,
-                    int(max(0, deribit[0]/RISK_RATIO-deribit[2], deribit[0]-deribit[1])/0.15*10)/10.0,
+                    int(max(0, deribit_balance[0]/RISK_RATIO-deribit_balance[2], deribit_balance[0]-deribit_balance[1])/0.15*10)/10.0,
                 ) - locked_size
 
                 if size >= 0.1:
@@ -226,8 +228,8 @@ class CatchGap(ServiceBase):
                     quote = quotes.get(sym, {})
                     for i in QUOTE_GAP:
                         if all((time.mktime(time.strptime(sym.split('-')[1], '%d%b%y')) - time.time() < i[2],
-                                # sym[-1] == 'C',
-                                quote.get('delta', 1) < i[1],
+                                sym[-1] == 'C',
+                                abs(quote.get('delta', 1)) < i[1],
                                 quote.get('okex', {}),
                         )):
                             if any((trade['direction'] == 1 and trade['price'] - float(quote['okex'][2] or 1) >= i[0],
@@ -267,8 +269,8 @@ class CatchGap(ServiceBase):
                     quote = quotes.get(sym, {})
                     for i in QUOTE_GAP:
                         if all((time.mktime(time.strptime(sym.split('-')[1], '%d%b%y')) - time.time() < i[2],
-                                # sym[-1] == 'C',
-                                quote.get('delta', 1) < i[1],
+                                sym[-1] == 'C',
+                                abs(quote.get('delta', 1)) < i[1],
                                 quote.get('deribit', {}),
                         )):
                             if any((data['side'] == 'buy' and float(data['price']) - (quote['deribit'][2] or 1) >= i[0],
