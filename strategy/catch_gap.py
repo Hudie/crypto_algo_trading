@@ -17,8 +17,9 @@ import copy
 
 
 
-RISK_RATIO = 2
-MAX_SIZE_PER_TRADE = 3
+RISK_RATIO_CALL = 2
+RISK_RATIO_PUT = 4
+MAX_SIZE_PER_TRADE = 2
 '''
 QUOTE_GAP = (
     (0.003, 0.36, 3 * 24 * 3600),
@@ -94,7 +95,7 @@ class CatchGap(ServiceBase):
             v = quotes[sym]
             if all(( not v.get('gapped', False),
                      not v.get('trading', False),
-                     sym[-1] == 'C',
+                     # sym[-1] == 'C',
             )):
                 timedelta = time.mktime(time.strptime(sym.split('-')[1], '%d%b%y')) - time.time()
                 delta = abs(v.get('delta', 1))
@@ -129,12 +130,13 @@ class CatchGap(ServiceBase):
         try:
             global locked_size, deribit_balance, okex_balance
 
+            risk_ratio = RISK_RATIO_CALL if sym[-1] == 'C' else RISK_RATIO_PUT
             if if_okex_sell:
                 size = min( min(
                     float(quote['okex'][1])/10,
                     quote['deribit'][3],
-                    int(max(0, okex_balance[0]/RISK_RATIO-okex_balance[2], okex_balance[0]-okex_balance[1])/0.15*10)/10.0,
-                    int(max(0, deribit_balance[0]-deribit_balance[2]*RISK_RATIO, deribit_balance[0]-deribit_balance[1])/quote['deribit'][2]*10)/10.0,
+                    int(max(0, okex_balance[0]/risk_ratio-okex_balance[2], okex_balance[0]-okex_balance[1])/0.15*10)/10.0,
+                    int(max(0, deribit_balance[0]-deribit_balance[2]*risk_ratio, deribit_balance[0]-deribit_balance[1])/quote['deribit'][2]*10)/10.0,
                 ) - locked_size, MAX_SIZE_PER_TRADE)
                 
                 # long firstly, then short
@@ -173,8 +175,8 @@ class CatchGap(ServiceBase):
                 size = min( min(
                     float(quote['okex'][3])/10,
                     quote['deribit'][1],
-                    int(max(0, okex_balance[0]-okex_balance[2]*RISK_RATIO, okex_balance[0]-okex_balance[1])/float(quote['okex'][2])*10)/10.0,
-                    int(max(0, deribit_balance[0]/RISK_RATIO-deribit_balance[2], deribit_balance[0]-deribit_balance[1])/0.15*10)/10.0,
+                    int(max(0, okex_balance[0]-okex_balance[2]*risk_ratio, okex_balance[0]-okex_balance[1])/float(quote['okex'][2])*10)/10.0,
+                    int(max(0, deribit_balance[0]/risk_ratio-deribit_balance[2], deribit_balance[0]-deribit_balance[1])/0.15*10)/10.0,
                 ) - locked_size, MAX_SIZE_PER_TRADE)
 
                 if size >= 0.1:
