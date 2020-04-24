@@ -147,7 +147,7 @@ class CatchGap(ServiceBase):
                     self.logger.info(res['result'])
                     filled_qty = res['result']['order']['filled_amount']
                     self.logger.info('filled quantity: %.1f' % filled_qty)
-                    locked_size -= size - filled_qty
+                    locked_size -= filled_qty
                     for price in (float(quote['okex'][0])-i*0.0005 for i in range(int((float(quote['okex'][0])-quote['deribit'][2])/0.0005))):
                         if filled_qty > 0:
                             ret = self.okexclient.order({'instrument_id': quote['oksym'],
@@ -205,7 +205,7 @@ class CatchGap(ServiceBase):
                             order_status = self.okexclient.get_order_status(order_id)
                         filled_qty = float(order_status.get('filled_qty', 0))/10
                         self.logger.info('filled quantity: %.1f' % filled_qty)
-                        locked_size -= size - filled_qty
+                        locked_size -= filled_qty
                         
                         if filled_qty > 0:
                             res = self.deribittradingapi.private_sell_get(sym, filled_qty, price=quote['deribit'][0], time_in_force='immediate_or_cancel')
