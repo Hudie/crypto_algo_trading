@@ -225,5 +225,5 @@ class DeribitMD(ServiceBase):
 
     
 if __name__ == '__main__':
-    service = DeribitMD('deribit-md', 'deribit-md')
+    service = DeribitMD('deribit-md', 'deribit-future-md')
     start_service(service, {'port': 9000, 'ip': 'localhost'})

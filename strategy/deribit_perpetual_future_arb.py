@@ -17,7 +17,7 @@ import copy
 
 
 MAX_SIZE_PER_TRADE = 10
-TX_ENTRY_GAP = 50
+TX_ENTRY_GAP = 45
 TX_EXIT_GAP = 5
 
 deribit_balance = [0, 0, 0]
@@ -30,10 +30,7 @@ class FutureArbitrage(ServiceBase):
     
     def __init__(self, logger_name):
         ServiceBase.__init__(self, logger_name)
-
-        self.sid = 'arb02'
-        
-        # SUB future data
+        # sub future data
         self.deribitmd = self.ctx.socket(zmq.SUB)
         self.deribitmd.connect('tcp://localhost:9050')
         self.deribitmd.setsockopt_string(zmq.SUBSCRIBE, '')
@@ -47,7 +44,6 @@ class FutureArbitrage(ServiceBase):
             global perpetual, future, if_order_placed, if_order_canceled
             if future[2] - perpetual[2] >= TX_ENTRY_GAP and not if_order_placed:
                 await self.deribittd.send_string(json.dumps({
-                    'sid': self.sid,
                     'accountid': 'mogu1988',
                     'method': 'sell',
                     'params': {'instrument_name': 'BTC-26JUN20',
@@ -73,10 +69,7 @@ class FutureArbitrage(ServiceBase):
                 pass
             elif max(future[2] - perpetual[2], perpetual[0] - future[0]) < TX_ENTRY_GAP - 5 and not if_order_canceled:
                 await self.deribittd.send_string(json.dumps({
-                    'sid': self.sid,
-                    'accountid': 'mogu1988',
-                    'method': 'cancel_all',
-                    'params': {},
+                    'accountid': 'mogu1988', 'method': 'cancel_all', 'params': {}
                 }))
                 msg = await self.deribittd.recv_string()
                 if_order_canceled = True
@@ -87,17 +80,10 @@ class FutureArbitrage(ServiceBase):
         except Exception as e:
             self.logger.exception(e)
 
-    # find gap, place opposite limit order on buy1/sell1 which may need tune on every order book change;
+    # find gap, place future limit order on buy1/sell1 which may need tune on every order book change;
     # when gap disppeared, cancel order;
-    # order filled or partially filled, cancel or change the opposite order and meanwhile place market order
-    # consider the influence of left time
-    async def gap_trade(self, sym, quote):
-        try:
-            global deribit_balance
-            pass
-        except Exception as e:
-            self.logger.exception(e)
-
+    # order filled or partially filled, place market order on perpetual side
+    # consider the influence of left time to ENTRY point
     async def sub_msg_deribit(self):
         try:
             global deribit_balance, perpetual, future
@@ -105,15 +91,10 @@ class FutureArbitrage(ServiceBase):
                 msg = json.loads(await self.deribitmd.recv_string())
                 if msg['type'] == 'quote':
                     quote = pickle.loads(eval(msg['data']))
-                    # self.logger.info(quote)
                     if quote['sym'] == 'BTC-PERPETUAL':
                         perpetual = [quote['bid_prices'][0], quote['bid_sizes'][0], quote['ask_prices'][0], quote['ask_sizes'][0]]
-                        # self.logger.info(perpetual)
                     elif quote['sym'] == 'BTC-26JUN20':
                         future = [quote['bid_prices'][0], quote['bid_sizes'][0], quote['ask_prices'][0], quote['ask_sizes'][0]]
-                        # self.logger.info(future)
-                    else:
-                        pass    
                     await self.find_quotes_gap()
                 elif msg['type'] == 'user.portfolio':
                     portfolio = pickle.loads(eval(msg['data']))
@@ -125,15 +106,9 @@ class FutureArbitrage(ServiceBase):
                         future_selled = sum([tx['amount'] if tx['direction'] == 'sell' and tx['instrument_name'] == 'BTC-26JUN20' else 0
                                              for tx in changes['trades']])
                         if future_selled > 0:
-                            self.logger.info(future_selled)
                             await self.deribittd.send_string(json.dumps({
-                                'sid': self.sid,
-                                'accountid': 'mogu1988',
-                                'method': 'buy',
-                                'params': {'instrument_name': 'BTC-PERPETUAL',
-                                           'amount': future_selled,
-                                           'type': 'market',
-                                }
+                                'accountid': 'mogu1988', 'method': 'buy',
+                                'params': {'instrument_name': 'BTC-PERPETUAL', 'amount': future_selled, 'type': 'market',}
                             }))
                             msg = await self.deribittd.recv_string()
                             
@@ -141,13 +116,8 @@ class FutureArbitrage(ServiceBase):
                                              for tx in changes['trades']])
                         if future_bought > 0:
                             await self.deribittd.send_string(json.dumps({
-                                'sid': self.sid,
-                                'accountid': 'mogu1988',
-                                'method': 'sell',
-                                'params': {'instrument_name': 'BTC-PERPETUAL',
-                                           'amount': future_bought,
-                                           'type': 'market',
-                                }
+                                'accountid': 'mogu1988', 'method': 'sell',
+                                'params': {'instrument_name': 'BTC-PERPETUAL', 'amount': future_bought, 'type': 'market',}
                             }))
                             msg = await self.deribittd.recv_string()
         except Exception as e:

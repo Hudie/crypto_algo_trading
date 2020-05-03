@@ -196,7 +196,7 @@ class DeribitTD(ServiceBase):
         try:
             while self.state == ServiceState.started:
                 msg = json.loads(await self.repserver.recv_string())
-                internalid = ':'.join([msg['sid'], msg.get('userid', ''), msg['accountid'], next(randomid)])
+                internalid = ':'.join([msg.get('sid', ''), msg.get('userid', ''), msg['accountid'], next(randomid)])
                 await self.repserver.send_string(json.dumps({'internalid': internalid}))
 
                 # msg['params'].update({'label': internalid})
