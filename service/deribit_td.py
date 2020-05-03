@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-from crypto_foundation.api.deribit_parser import parse_deribit_trade, parse_deribit_quote, parse_deribit_order_book, parse_deribit_instrument
 from crypto_foundation.common.constant import Ecn, Broker, MarketDataApi, TradeDataApi
 from crypto_foundation.common.account import CryptoTradingAccount
 from base import ServiceState, ServiceBase, start_service
@@ -8,7 +7,6 @@ import zmq.asyncio
 import asyncio
 import websockets
 import json
-import pickle
 import time
 import queue
 
@@ -116,7 +114,7 @@ class DeribitTD(ServiceBase):
                             msg = mq.get()
                             msg.update({'jsonrpc': '2.0', 'method' : 'private/' + msg['method'],
                                         'id': eval('_'.join(('MSG', msg['method'].upper(), 'ID')))})
-                            self.logger.info(msg)
+                            # self.logger.info(msg)
                             await websocket.send(json.dumps(msg))
                             lastheartbeat = time.time()
 
@@ -133,13 +131,13 @@ class DeribitTD(ServiceBase):
                             if response['params']['type'] == 'test_request':
                                 await websocket.send(json.dumps(test))
                                 lastheartbeat = time.time()
-                            else:
-                                self.logger.info('Serverside heartbeat: ' + str(response))
+                            # else:
+                            #    self.logger.info('Serverside heartbeat: ' + str(response))
                         elif response.get('id', '') in (MSG_TEST_ID, ):
                             pass
                         else:
                             # deal tx response
-                            self.logger.info(response)
+                            # self.logger.info(response)
                             if response.get('id', '') == MSG_GET_OPEN_ORDERS_BY_CURRENCY_ID:
                                 await self.pubserver.send_string(json.dumps({
                                     'accountid': account.id,
@@ -201,9 +199,9 @@ class DeribitTD(ServiceBase):
                 internalid = ':'.join([msg['sid'], msg.get('userid', ''), msg['accountid'], next(randomid)])
                 await self.repserver.send_string(json.dumps({'internalid': internalid}))
 
-                msg['params'].update({'label': internalid})
-                self.logger.info('**** Request received:')
-                self.logger.info(msg)
+                # msg['params'].update({'label': internalid})
+                # self.logger.info('**** Request received:')
+                # self.logger.info(msg)
                 '''
                 if msg['accountid'] not in orders:
                     orders[msg['accountid']] = []
@@ -223,23 +221,24 @@ class DeribitTD(ServiceBase):
         else:
             self.state = ServiceState.started
             # init account info
-            testaccount = CryptoTradingAccount("deribit_test_account",
-                                               Broker.deribit_dma, "testid", "",
-                                               MarketDataApi.deribit_md_websocket,
-                                               TradeDataApi.deribit_td_websocket,
-                                               "8VP1NV2u", "LEnJgX-u5LpROjpOKGVcY_NRbC_nByBIOg-mCflwzMg")
-            accounts.append(testaccount)
+            mogu = CryptoTradingAccount("mogu1988",
+                                        Broker.deribit_dma, "mogu1988", "",
+                                        MarketDataApi.deribit_md_websocket,
+                                        TradeDataApi.deribit_td_websocket,
+                                        "PmyJIl5T", "7WBI4N_YT8YB5nAFq1VjPFedLMxGfrxxCbreMFOYLv0")
+            accounts.append(mogu)
             
             # create websocket for every account
             for account in accounts:
                 # asyncio.create_task(self.pub_msg(account))
                 asyncio.ensure_future(self.pub_msg(account))
                 # fetch account info, including orders and pos
-                requests[account.id] = queue.Queue()
-                requests[account.id].put({'method': 'get_positions', 'params': {'currency': 'BTC', 'kind': 'option'}})
-                requests[account.id].put({'method': 'get_open_orders_by_currency', 'params': {'currency' : 'BTC'}})
+                # requests[account.id] = queue.Queue()
+                # requests[account.id].put({'method': 'get_positions', 'params': {'currency': 'BTC', 'kind': 'option'}})
+                # requests[account.id].put({'method': 'get_open_orders_by_currency', 'params': {'currency' : 'BTC'}})
                 
-            await self.on_request()
+            # await self.on_request()
+            asyncio.ensure_future(self.on_request())
 
 
     
