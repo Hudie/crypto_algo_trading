@@ -1,30 +1,25 @@
 # -*- coding: utf-8 -*-
 
-# from utility.enum import enum
-from tornado.platform.asyncio import AsyncIOMainLoop
 from crypto_trading.service.base import ServiceState, ServiceBase, start_service
-import openapi_client		# deribit http rest
-import logging
 import zmq.asyncio
 import asyncio
-import tornado
 import json
 import pickle
-import time
-import random
-import copy
 
 
 
 MAX_SIZE_PER_TRADE = 10
-TX_ENTRY_GAP = 45
+TX_ENTRY_GAP = 40
+TX_ENTRY_GAP_CANCEL = 38
 TX_EXIT_GAP = 5
+POSITION_SIZE_THRESHOLD = 82300
 
 deribit_balance = [0, 0, 0]
 perpetual = [0, 0, 0, 0]
 future = [0, 0, 0, 0]
-if_order_placed = False
-if_order_canceled = False
+can_place_order = True
+stop_strategy = False
+
 
 class FutureArbitrage(ServiceBase):
     
@@ -41,41 +36,26 @@ class FutureArbitrage(ServiceBase):
     # find gap between perpetual and current season future
     async def find_quotes_gap(self):
         try:
-            global perpetual, future, if_order_placed, if_order_canceled
-            if future[2] - perpetual[2] >= TX_ENTRY_GAP and not if_order_placed:
+            global perpetual, future, can_place_order
+            if future[2] - perpetual[2] >= TX_ENTRY_GAP and can_place_order:
                 await self.deribittd.send_string(json.dumps({
-                    'accountid': 'mogu1988',
-                    'method': 'sell',
+                    'accountid': 'mogu1988', 'method': 'sell',
                     'params': {'instrument_name': 'BTC-26JUN20',
                                'amount': MAX_SIZE_PER_TRADE,
                                'type': 'limit',
                                'price': max(future[2] - 0.5, future[0] + 0.5),
-                               'post_only': True,
-                    }
+                               'post_only': True, }
                 }))
                 msg = await self.deribittd.recv_string()
-                if_order_placed = True
-                if_order_canceled = False
+                can_place_order = False
                 
-                '''
-                if response = filled or partially filled:
-                    market_order_on_perpetual()
-                elif not on_sell1:
-                    change_order()
-                elif gap_disppear():
-                    cancel_order() and perpetual_order_if_not_all_canceled()
-                '''
-            elif perpetual[0] - future[0] >= TX_ENTRY_GAP and not if_order_placed:
+            elif perpetual[0] - future[0] >= TX_ENTRY_GAP and can_place_order:
                 pass
-            elif max(future[2] - perpetual[2], perpetual[0] - future[0]) < TX_ENTRY_GAP - 5 and not if_order_canceled:
+            elif max(future[2] - perpetual[2], perpetual[0] - future[0]) < TX_ENTRY_GAP_CANCEL and not can_place_order:
                 await self.deribittd.send_string(json.dumps({
                     'accountid': 'mogu1988', 'method': 'cancel_all', 'params': {}
                 }))
                 msg = await self.deribittd.recv_string()
-                if_order_canceled = True
-                if_order_placed = False
-            else:
-                pass
 
         except Exception as e:
             self.logger.exception(e)
@@ -86,10 +66,10 @@ class FutureArbitrage(ServiceBase):
     # consider the influence of left time to ENTRY point
     async def sub_msg_deribit(self):
         try:
-            global deribit_balance, perpetual, future
+            global deribit_balance, perpetual, future, can_place_order
             while self.state == ServiceState.started:
                 msg = json.loads(await self.deribitmd.recv_string())
-                if msg['type'] == 'quote':
+                if msg['type'] == 'quote' and not stop_strategy:
                     quote = pickle.loads(eval(msg['data']))
                     if quote['sym'] == 'BTC-PERPETUAL':
                         perpetual = [quote['bid_prices'][0], quote['bid_sizes'][0], quote['ask_prices'][0], quote['ask_sizes'][0]]
@@ -102,24 +82,22 @@ class FutureArbitrage(ServiceBase):
                 elif msg['type'] == 'user.changes.future':
                     changes = pickle.loads(eval(msg['data']))
                     self.logger.info(changes)
-                    if changes['trades']:
-                        future_selled = sum([tx['amount'] if tx['direction'] == 'sell' and tx['instrument_name'] == 'BTC-26JUN20' else 0
-                                             for tx in changes['trades']])
-                        if future_selled > 0:
+                    if changes['instrument_name'] == 'BTC-26JUN20':
+                        if changes['trades']:
+                            future_filled = sum([tx['amount'] for tx in changes['trades']])
                             await self.deribittd.send_string(json.dumps({
-                                'accountid': 'mogu1988', 'method': 'buy',
-                                'params': {'instrument_name': 'BTC-PERPETUAL', 'amount': future_selled, 'type': 'market',}
+                                'accountid': 'mogu1988', 'method': 'buy' if changes['trades'][0]['direction'] == 'sell' else 'sell',
+                                'params': {'instrument_name': 'BTC-PERPETUAL', 'amount': future_filled, 'type': 'market',}
                             }))
                             msg = await self.deribittd.recv_string()
+                        if all([True if o['order_state'] == 'filled' else False for o in changes['orders']]) or not changes['orders']:
+                            can_place_order = True
+                        else:
+                            can_place_order = False
+                        if changes['positions']:
+                            if abs(changes['positions'][0]['size']) >= POSITION_SIZE_THRESHOLD:
+                                stop_strategy = True
                             
-                        future_bought = sum([tx['amount'] if tx['direction'] == 'buy' and tx['instrument_name'] == 'BTC-26JUN20' else 0
-                                             for tx in changes['trades']])
-                        if future_bought > 0:
-                            await self.deribittd.send_string(json.dumps({
-                                'accountid': 'mogu1988', 'method': 'sell',
-                                'params': {'instrument_name': 'BTC-PERPETUAL', 'amount': future_bought, 'type': 'market',}
-                            }))
-                            msg = await self.deribittd.recv_string()
         except Exception as e:
             self.logger.exception(e)
                 

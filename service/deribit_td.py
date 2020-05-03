@@ -167,7 +167,7 @@ class DeribitTD(ServiceBase):
                                 await self.pubserver.send_string(json.dumps({
                                     'accountid': account.id,
                                     'type': 'cancel_all',
-                                    'data': response['result']}))
+                                    'data': response.get('result', {})}))
                             elif response.get('id', '') == MSG_BUY_ID:
                                 await self.pubserver.send_string(json.dumps({
                                     'accountid': account.id,
