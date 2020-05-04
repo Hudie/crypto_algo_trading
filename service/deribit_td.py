@@ -55,6 +55,7 @@ MSG_GET_POSITIONS_ID 	= 2236
 MSG_GET_POSITION_ID 	= 404
 MSG_BUY_ID		= 5275
 MSG_SELL_ID		= 2148
+MSG_EDIT_ID		= 3725
 MSG_CANCEL_ID		= 4214
 MSG_CANCEL_ALL_ID	= 8748
 MSG_GET_ORDER_STATE_ID	= 4316
@@ -177,6 +178,11 @@ class DeribitTD(ServiceBase):
                                 await self.pubserver.send_string(json.dumps({
                                     'accountid': account.id,
                                     'type': 'sell',
+                                    'data': response['result']}))
+                            elif response.get('id', '') == MSG_EDIT_ID:
+                                await self.pubserver.send_string(json.dumps({
+                                    'accountid': account.id,
+                                    'type': 'edit',
                                     'data': response['result']}))
                             else:
                                 pass

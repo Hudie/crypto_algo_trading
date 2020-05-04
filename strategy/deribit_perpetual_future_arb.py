@@ -8,11 +8,11 @@ import pickle
 
 
 
-MAX_SIZE_PER_TRADE = 10
-TX_ENTRY_GAP = 30
-TX_ENTRY_GAP_CANCEL = 27
+MAX_SIZE_PER_TRADE = 100
+TX_ENTRY_GAP = 43
+TX_ENTRY_GAP_CANCEL = 40
 TX_EXIT_GAP = 5
-POSITION_SIZE_THRESHOLD = 82300
+POSITION_SIZE_THRESHOLD = 85000
 
 deribit_balance = [0, 0, 0]
 perpetual = [0, 0, 0, 0]
@@ -20,6 +20,7 @@ future = [0, 0, 0, 0]
 can_place_order = True
 if_canceling = False
 stop_strategy = False
+current_order = {}
 
 
 class FutureArbitrage(ServiceBase):
@@ -37,18 +38,28 @@ class FutureArbitrage(ServiceBase):
     # find gap between perpetual and current season future
     async def find_quotes_gap(self):
         try:
-            global perpetual, future, can_place_order, if_canceling
-            if future[2] - perpetual[2] >= TX_ENTRY_GAP and can_place_order:
-                await self.deribittd.send_string(json.dumps({
-                    'accountid': 'mogu1988', 'method': 'sell',
-                    'params': {'instrument_name': 'BTC-26JUN20',
-                               'amount': MAX_SIZE_PER_TRADE,
-                               'type': 'limit',
-                               'price': max(future[2] - 0.5, future[0] + 0.5),
-                               'post_only': True, }
-                }))
-                msg = await self.deribittd.recv_string()
-                can_place_order = False
+            global perpetual, future, can_place_order, if_canceling, current_order
+            if future[2] - perpetual[2] >= TX_ENTRY_GAP:
+                if can_place_order:
+                    await self.deribittd.send_string(json.dumps({
+                        'accountid': 'mogu1988', 'method': 'sell',
+                        'params': {'instrument_name': 'BTC-26JUN20',
+                                   'amount': MAX_SIZE_PER_TRADE,
+                                   'type': 'limit',
+                                   'price': max(future[2] - 0.5, future[0] + 0.5),
+                                   'post_only': True, }
+                    }))
+                    msg = await self.deribittd.recv_string()
+                    can_place_order = False
+                else:
+                    if future[2] < current_order['price']:
+                        await self.deribittd.send_string(json.dumps({
+                            'accountid': 'mogu1988', 'method': 'edit',
+                            'params': {'order_id': current_order['order_id'],
+                                       'price': max(future[2] - 0.5, future[0] + 0.5),
+                                       'post_only': True, }
+                        }))
+                        msg = await self.deribittd.recv_string()
                 
             elif perpetual[0] - future[0] >= TX_ENTRY_GAP and can_place_order:
                 pass
@@ -69,7 +80,7 @@ class FutureArbitrage(ServiceBase):
     # consider the influence of left time to ENTRY point
     async def sub_msg_deribit(self):
         try:
-            global deribit_balance, perpetual, future, can_place_order, if_canceling, stop_strategy
+            global deribit_balance, perpetual, future, can_place_order, if_canceling, stop_strategy, current_order
             while self.state == ServiceState.started:
                 msg = json.loads(await self.deribitmd.recv_string())
                 if msg['type'] == 'quote' and not stop_strategy:
@@ -96,8 +107,10 @@ class FutureArbitrage(ServiceBase):
                         if all([True if o['order_state'] in ('filled', 'cancelled') else False for o in changes['orders']]) or not changes['orders']:
                             can_place_order = True
                             if_canceling = False
+                            current_order = {}
                         else:
                             can_place_order = False
+                            current_order = changes['orders'][0]
                         if changes['positions']:
                             if abs(changes['positions'][0]['size']) >= POSITION_SIZE_THRESHOLD:
                                 stop_strategy = True
