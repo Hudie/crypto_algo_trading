@@ -183,7 +183,7 @@ class DeribitTD(ServiceBase):
                                 await self.pubserver.send_string(json.dumps({
                                     'accountid': account.id,
                                     'type': 'edit',
-                                    'data': response['result']}))
+                                    'data': response.get('result', {})}))
                             else:
                                 pass
                 else:
