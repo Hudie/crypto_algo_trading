@@ -18,9 +18,6 @@ accounts = []
 # key: accountid, value: request queue
 requests = {}
 
-DERIBIT_EXCHANGE_ID = Ecn.deribit
-SYMBOL = 'BTC'
-
 MSG_AUTH_ID = 9929
 auth = {
     "jsonrpc" : "2.0",
@@ -189,6 +186,8 @@ class DeribitTD(ServiceBase):
                 else:
                     if self.state == ServiceState.started:
                         await self.pub_msg(account)
+        except websockets.exceptions.ConnectionClosedError:
+            await self.pub_msg(account)
         except Exception as e:
             self.logger.exception(e)
             await self.pub_msg(account)

@@ -13,7 +13,6 @@ import time
 activechannels = set()
 hourlyupdated = False
 
-DERIBIT_EXCHANGE_ID = 101
 DERIBIT_CLIENT_ID = "PmyJIl5T"
 DERIBIT_CLIENT_SECRET = "7WBI4N_YT8YB5nAFq1VjPFedLMxGfrxxCbreMFOYLv0"
 SYMBOL = 'BTC'
