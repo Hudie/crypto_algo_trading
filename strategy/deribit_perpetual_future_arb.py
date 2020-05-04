@@ -9,8 +9,8 @@ import pickle
 
 
 MAX_SIZE_PER_TRADE = 10
-TX_ENTRY_GAP = 40
-TX_ENTRY_GAP_CANCEL = 38
+TX_ENTRY_GAP = 30
+TX_ENTRY_GAP_CANCEL = 27
 TX_EXIT_GAP = 5
 POSITION_SIZE_THRESHOLD = 82300
 
@@ -18,6 +18,7 @@ deribit_balance = [0, 0, 0]
 perpetual = [0, 0, 0, 0]
 future = [0, 0, 0, 0]
 can_place_order = True
+if_canceling = False
 stop_strategy = False
 
 
@@ -36,7 +37,7 @@ class FutureArbitrage(ServiceBase):
     # find gap between perpetual and current season future
     async def find_quotes_gap(self):
         try:
-            global perpetual, future, can_place_order
+            global perpetual, future, can_place_order, if_canceling
             if future[2] - perpetual[2] >= TX_ENTRY_GAP and can_place_order:
                 await self.deribittd.send_string(json.dumps({
                     'accountid': 'mogu1988', 'method': 'sell',
@@ -51,11 +52,13 @@ class FutureArbitrage(ServiceBase):
                 
             elif perpetual[0] - future[0] >= TX_ENTRY_GAP and can_place_order:
                 pass
-            elif max(future[2] - perpetual[2], perpetual[0] - future[0]) < TX_ENTRY_GAP_CANCEL and not can_place_order:
+            elif max(future[2] - perpetual[2], perpetual[0] - future[0]) < TX_ENTRY_GAP_CANCEL and not can_place_order and not if_canceling:
+                self.logger.info('***************** cancel order')
                 await self.deribittd.send_string(json.dumps({
                     'accountid': 'mogu1988', 'method': 'cancel_all', 'params': {}
                 }))
                 msg = await self.deribittd.recv_string()
+                if_canceling = True
 
         except Exception as e:
             self.logger.exception(e)
@@ -66,7 +69,7 @@ class FutureArbitrage(ServiceBase):
     # consider the influence of left time to ENTRY point
     async def sub_msg_deribit(self):
         try:
-            global deribit_balance, perpetual, future, can_place_order
+            global deribit_balance, perpetual, future, can_place_order, if_canceling, stop_strategy
             while self.state == ServiceState.started:
                 msg = json.loads(await self.deribitmd.recv_string())
                 if msg['type'] == 'quote' and not stop_strategy:
@@ -90,8 +93,9 @@ class FutureArbitrage(ServiceBase):
                                 'params': {'instrument_name': 'BTC-PERPETUAL', 'amount': future_filled, 'type': 'market',}
                             }))
                             msg = await self.deribittd.recv_string()
-                        if all([True if o['order_state'] == 'filled' else False for o in changes['orders']]) or not changes['orders']:
+                        if all([True if o['order_state'] in ('filled', 'cancelled') else False for o in changes['orders']]) or not changes['orders']:
                             can_place_order = True
+                            if_canceling = False
                         else:
                             can_place_order = False
                         if changes['positions']:
