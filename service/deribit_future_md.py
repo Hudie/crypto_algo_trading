@@ -141,7 +141,7 @@ class DeribitMD(ServiceBase):
                     
                     # update instruments every hour
                     if time.gmtime().tm_min == 5 and hourlyupdated == False:
-                        self.logger.info('Fetching instruments hourly ******')
+                        # self.logger.info('Fetching instruments hourly ******')
                         await websocket.send(json.dumps(instruments))
                         hourlyupdated = True
                     elif time.gmtime().tm_min == 31 and hourlyupdated == True:
@@ -164,8 +164,8 @@ class DeribitMD(ServiceBase):
                             for j in ('trades', 'ticker', 'book'):
                                 newchannels.add('.'.join([j, i['instrument_name'], 'raw']))
                         if len(newchannels.difference(activechannels)) > 0:
-                            self.logger.info('There are new channels as following:')
-                            self.logger.info(str(newchannels.difference(activechannels)))
+                            # self.logger.info('There are new channels as following:')
+                            # self.logger.info(str(newchannels.difference(activechannels)))
                             subscribe['params']['channels'] = list(newchannels)
                             await websocket.send(json.dumps(subscribe))
                             unsubscribe['params']['channels'] = list(activechannels.difference(newchannels))

@@ -13,10 +13,10 @@ SEASON_FUTURE = 'BTC-26JUN20'
 
 SIZE_PER_TRADE = 200
 TX_ENTRY_GAP = [40, 50, 60, 70, 80, 90, 100]
-TX_ENTRY_GAP_CANCEL_DELTA = 3.5
+TX_ENTRY_GAP_CANCEL_DELTA = 2
 TX_EXIT_GAP = 10
-TX_EXIT_GAP_CANCEL = TX_EXIT_GAP + 3
-POSITION_SIZE_THRESHOLD = [152000 * i for i in [1, 2, 3, 4, 5, 6, 7]]
+TX_EXIT_GAP_CANCEL = TX_EXIT_GAP + 2
+POSITION_SIZE_THRESHOLD = [150000 * i for i in [1, 2, 3, 4, 5, 6, 7]]
 
 deribit_margin = [0, 0, 0]
 perpetual = []
@@ -134,7 +134,6 @@ class FutureArbitrage(ServiceBase):
                 msg = json.loads(await self.deribitmd.recv_string())
                 if msg['type'] == 'quote':
                     quote = pickle.loads(eval(msg['data']))
-                    self.logger.info(quote)
                     if quote['sym'] == 'BTC-PERPETUAL':
                         perpetual = [quote['bid_prices'][0], quote['bid_sizes'][0], quote['ask_prices'][0], quote['ask_sizes'][0]]
                     elif quote['sym'] == SEASON_FUTURE:
