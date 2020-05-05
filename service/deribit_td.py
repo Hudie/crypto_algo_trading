@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from crypto_foundation.common.constant import Broker, MarketDataApi, TradeDataApi
+from crypto_foundation.common.constant import Ecn, Broker, MarketDataApi, TradeDataApi
 from crypto_foundation.common.account import CryptoTradingAccount
 from base import ServiceState, ServiceBase, start_service
 import zmq.asyncio
@@ -13,7 +13,7 @@ import queue
 
 
 orders = {}
-# tokens = {}
+tokens = {}
 accounts = []
 # key: accountid, value: request queue
 requests = {}
@@ -58,13 +58,13 @@ MSG_CANCEL_ALL_ID	= 8748
 MSG_GET_ORDER_STATE_ID	= 4316
 MSG_GET_OPEN_ORDERS_BY_CURRENCY_ID	= 1953
 
-
 def get_random_id():
     count = 0
     while True:
         yield ':'.join([str(int(time.time())), str(count)])
         count += 1
 randomid = get_random_id()
+
 
   
 class DeribitTD(ServiceBase):
@@ -89,21 +89,20 @@ class DeribitTD(ServiceBase):
                 
                 # set heartbeats to keep alive
                 await websocket.send(json.dumps(heartbeat))
-                await websocket.recv()
+                res = await websocket.recv()
 
                 # auth
                 auth['params']['client_id'] = account.api_public_key
                 auth['params']['client_secret'] = account.api_private_key
                 await websocket.send(json.dumps(auth))
-                await websocket.recv()
-                # res = json.loads(await websocket.recv())
-                # tokens[account.id] = res['result']['access_token']
+                res = json.loads(await websocket.recv())
+                tokens[account.id] = res['result']['access_token']
                 
                 # it is very important here to use 'self.state' to control start/stop!!!
                 lastheartbeat = time.time()
                 while websocket.open and self.state == ServiceState.started:
                     # check heartbeat to see if websocket is broken
-                    if time.time() - lastheartbeat > 30:
+                    if time.time() - lastheartbeat > 15:
                         raise websockets.exceptions.ConnectionClosedError(1003, 'Serverside heartbeat stopped.')
 
                     # check request queue to send request
@@ -204,7 +203,6 @@ class DeribitTD(ServiceBase):
                 msg = json.loads(await self.repserver.recv_string())
                 internalid = ':'.join([msg.get('sid', ''), msg.get('userid', ''), msg['accountid'], next(randomid)])
                 await self.repserver.send_string(json.dumps({'internalid': internalid}))
-                # await self.repserver.send_string('echo')
 
                 # msg['params'].update({'label': internalid})
                 # self.logger.info('**** Request received:')
@@ -251,4 +249,4 @@ class DeribitTD(ServiceBase):
     
 if __name__ == '__main__':
     service = DeribitTD('deribit-td', 'deribit-td')
-    start_service(service, {})
+    start_service(service, {'port': 9010, 'ip': 'localhost'})

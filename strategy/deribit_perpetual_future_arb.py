@@ -134,6 +134,7 @@ class FutureArbitrage(ServiceBase):
                 msg = json.loads(await self.deribitmd.recv_string())
                 if msg['type'] == 'quote':
                     quote = pickle.loads(eval(msg['data']))
+                    self.logger.info(quote)
                     if quote['sym'] == 'BTC-PERPETUAL':
                         perpetual = [quote['bid_prices'][0], quote['bid_sizes'][0], quote['ask_prices'][0], quote['ask_sizes'][0]]
                     elif quote['sym'] == SEASON_FUTURE:
