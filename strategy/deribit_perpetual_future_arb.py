@@ -11,12 +11,12 @@ import pickle
 DERIBIT_ACCOUNT_ID = 'mogu1988'
 SEASON_FUTURE = 'BTC-26JUN20'
 
-SIZE_PER_TRADE = 100
-TX_ENTRY_GAP = 45
-TX_ENTRY_GAP_CANCEL = TX_ENTRY_GAP - 3
+SIZE_PER_TRADE = 200
+TX_ENTRY_GAP = [40, 50, 60, 70, 80, 90, 100]
+TX_ENTRY_GAP_CANCEL_DELTA = 3.5
 TX_EXIT_GAP = 10
-TX_EXIT_GAP_CANCEL = TX_EXIT_GAP - 3
-POSITION_SIZE_THRESHOLD = [100, 120000]		# position upper limit & lower limit
+TX_EXIT_GAP_CANCEL = TX_EXIT_GAP + 3
+POSITION_SIZE_THRESHOLD = [152000 * i for i in [1, 2, 3, 4, 5, 6, 7]]
 
 deribit_margin = [0, 0, 0]
 perpetual = []
@@ -24,8 +24,6 @@ future = []
 future_size = 0
 perpetual_size = 0
 can_place_order = True
-can_entry = True
-can_exit = True
 if_order_cancelling = False
 if_price_changing = False
 current_order = {}
@@ -47,10 +45,14 @@ class FutureArbitrage(ServiceBase):
     async def find_quotes_gap(self):
         try:
             global perpetual, future, can_place_order, if_order_cancelling, if_price_changing, current_order, future_size
-            global can_entry, can_exit
+
+            gap = max(future[2] - perpetual[2], perpetual[0] - future[0])
+            gap_idx = max(sum([1 if gap >= i else 0 for i in TX_ENTRY_GAP]) - 1, 0)
+            can_entry = False if max(abs(future_size), abs(perpetual_size)) >= POSITION_SIZE_THRESHOLD[gap_idx] else True
+            can_exit = False if min(abs(future_size), abs(perpetual_size)) <= 100 else True
             
             # future > perpetual entry point
-            if future[2] - perpetual[2] >= TX_ENTRY_GAP and can_place_order and can_entry:
+            if future[2] - perpetual[2] >= TX_ENTRY_GAP[gap_idx] and can_place_order and can_entry:
                 await self.deribittd.send_string(json.dumps({
                     'accountid': DERIBIT_ACCOUNT_ID, 'method': 'sell',
                     'params': {'instrument_name': SEASON_FUTURE,
@@ -62,7 +64,9 @@ class FutureArbitrage(ServiceBase):
                 await self.deribittd.recv_string()
                 can_place_order = False
             # future > perpetual entry point: change limit order price
-            elif perpetual[2] + TX_ENTRY_GAP_CANCEL <= future[2] < current_order.get('price', 0) and not if_price_changing:
+            elif all((perpetual[2] + TX_ENTRY_GAP[gap_idx] - TX_ENTRY_GAP_CANCEL_DELTA <= future[2] < current_order.get('price', 0),
+                      not if_price_changing)):
+                self.logger.info('---- change price to: {} ----'.format(max(future[2] - 0.5, future[0] + 0.5)))
                 await self.deribittd.send_string(json.dumps({
                     'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
                     'params': {'order_id': current_order['order_id'],
@@ -73,10 +77,10 @@ class FutureArbitrage(ServiceBase):
                 await self.deribittd.recv_string()
                 if_price_changing = True
             # perpetual > future entry point
-            elif perpetual[0] - future[0] >= TX_ENTRY_GAP and can_place_order and can_entry:
+            elif perpetual[0] - future[0] >= TX_ENTRY_GAP[gap_idx] and can_place_order and can_entry:
                 pass
             # cancel orders in this area
-            elif all((max(future[2] - perpetual[2], perpetual[0] - future[0]) < TX_ENTRY_GAP_CANCEL,
+            elif all((max(future[2] - perpetual[2], perpetual[0] - future[0]) < TX_ENTRY_GAP[gap_idx] - TX_ENTRY_GAP_CANCEL_DELTA,
                       max(future[0] - perpetual[0], perpetual[2] - future[2]) > TX_EXIT_GAP_CANCEL,
                       not can_place_order,
                       not if_order_cancelling)):
@@ -124,7 +128,7 @@ class FutureArbitrage(ServiceBase):
     async def sub_msg_deribit(self):
         try:
             global deribit_margin, perpetual, future, can_place_order, if_order_cancelling, if_price_changing
-            global can_entry, can_exit, current_order, future_size, perpetual_size
+            global current_order, future_size, perpetual_size
             
             while self.state == ServiceState.started:
                 msg = json.loads(await self.deribitmd.recv_string())
@@ -163,8 +167,7 @@ class FutureArbitrage(ServiceBase):
                         if changes['positions']:
                             perpetual_size = changes['positions'][0]['size']
 
-                    can_entry = False if max(abs(future_size), abs(perpetual_size)) >= POSITION_SIZE_THRESHOLD[1] else True
-                    can_exit = False if min(abs(future_size), abs(perpetual_size)) <= POSITION_SIZE_THRESHOLD[0] else True
+                    
         except Exception as e:
             self.logger.exception(e)
                 

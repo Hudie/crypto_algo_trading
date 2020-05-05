@@ -7,11 +7,9 @@ import websockets
 import json
 import pickle
 import time
+# from memory_profiler import profile
 
 
-
-activechannels = set()
-hourlyupdated = False
 
 DERIBIT_CLIENT_ID = "PmyJIl5T"
 DERIBIT_CLIENT_SECRET = "7WBI4N_YT8YB5nAFq1VjPFedLMxGfrxxCbreMFOYLv0"
@@ -103,51 +101,28 @@ class DeribitMD(ServiceBase):
         self.pubserver = self.ctx.socket(zmq.PUB)
         self.pubserver.bind('tcp://*:9050')
 
+    # @profile
     async def pub_msg(self):
         # get marketdata from exchange socket, then pub to zmq
         try:
             async with websockets.connect('wss://www.deribit.com/ws/api/v2') as websocket:
                 self.logger.info('Connected to deribit websocket server')
-                global activechannels, hourlyupdated
                 # set heartbeats to keep alive
                 await websocket.send(json.dumps(heartbeat))
                 await websocket.recv()
                 
                 await websocket.send(json.dumps(auth))
-                res = json.loads(await websocket.recv())
-                # self.logger.info(res)
-                # get instruments and then update channels
-                await websocket.send(json.dumps(instruments))
-                response = json.loads(await websocket.recv())
-                for i in response['result']:
-                    self.pubserver.send_string(json.dumps({'type': 'instrument',
-                                                           'data': str(pickle.dumps(parse_deribit_instrument(i)))}))
-                    for j in ('trades', 'ticker', 'book'):
-                        activechannels.add('.'.join([j, i['instrument_name'], 'raw']))
-                subscribe['params']['channels'] = list(activechannels)
-                await websocket.send(json.dumps(subscribe))
-                res = json.loads(await websocket.recv())
+                await websocket.recv()
+
                 private_subscribe['params']['channels'] = ['user.portfolio.BTC', 'user.changes.future.BTC.raw']
                 await websocket.send(json.dumps(private_subscribe))
                 
-                hourlyupdated = True
-
                 # it is very important here to use 'self.state' to control start/stop!!!
                 lastheartbeat = time.time()
                 while websocket.open and self.state == ServiceState.started:
                     # check heartbeat to see if websocket is broken
                     if time.time() - lastheartbeat > 30:
                         raise websockets.exceptions.ConnectionClosedError(1003, 'Serverside heartbeat stopped')
-                    
-                    # update instruments every hour
-                    if time.gmtime().tm_min == 5 and hourlyupdated == False:
-                        self.logger.info('Fetching instruments hourly ******')
-                        await websocket.send(json.dumps(instruments))
-                        hourlyupdated = True
-                    elif time.gmtime().tm_min == 31 and hourlyupdated == True:
-                        hourlyupdated = False
-                    else:
-                        pass
                     
                     response = json.loads(await websocket.recv())
                     # need response heartbeat to keep alive
@@ -158,48 +133,19 @@ class DeribitMD(ServiceBase):
                         else:
                             pass
                             # self.logger.info('Serverside heartbeat: ' + str(response))
-                    elif response.get('id', '') == MSG_INSTRUMENTS_ID:
-                        newchannels = set()
-                        for i in response['result']:
-                            for j in ('trades', 'ticker', 'book'):
-                                newchannels.add('.'.join([j, i['instrument_name'], 'raw']))
-                        if len(newchannels.difference(activechannels)) > 0:
-                            self.logger.info('There are new channels as following:')
-                            self.logger.info(str(newchannels.difference(activechannels)))
-                            subscribe['params']['channels'] = list(newchannels)
-                            await websocket.send(json.dumps(subscribe))
-                            unsubscribe['params']['channels'] = list(activechannels.difference(newchannels))
-                            await websocket.send(json.dumps(unsubscribe))
-                            newinstruments = set()
-                            for i in newchannels.difference(activechannels):
-                                newinstruments.add(i.split('.')[1])
-                            for i in response['result']:
-                                if i['instrument_name'] in newinstruments:
-                                    self.pubserver.send_string(json.dumps({'type': 'instrument',
-                                                                           'data': str(pickle.dumps(parse_deribit_instrument(i)))}))
-                            activechannels = newchannels
                     elif response.get('id', '') in (MSG_TEST_ID, MSG_SUBSCRIBE_ID, MSG_UNSUBSCRIBE_ID, MSG_PRIVATE_SUBSCRIBE_ID):
                         pass
                     else:
-                        # self.logger.info(str(response['params']['data']))
-                        if response['params']['channel'].startswith('trades'):
-                            for i in response['params']['data']:
-                                self.pubserver.send_string(json.dumps({'type': 'trade',
-                                                                       'data': str(pickle.dumps(parse_deribit_trade(i)))}))
-                        elif response['params']['channel'].startswith('ticker'):
+                        if response['params']['channel'].startswith('ticker'):
                             self.pubserver.send_string(
                                 json.dumps({'type': 'quote',
                                             'data': str(pickle.dumps(parse_deribit_quote(response['params']['data'])))}))
-                        elif response['params']['channel'].startswith('book'):
-                            self.pubserver.send_string(
-                                json.dumps({'type': 'book',
-                                            'data': str(pickle.dumps(parse_deribit_order_book(response['params']['data'])))}))
                         elif response['params']['channel'].startswith('user.portfolio'):
                             # self.logger.info(response['params']['data'])
                             self.pubserver.send_string(
                                 json.dumps({'type': 'user.portfolio',
                                             'data': str(pickle.dumps(response['params']['data']))}))
-                        elif response['params']['channel'].startswith('user.changes.future'):
+                        elif response['params']['channel'].startswith('user.changes'):
                             self.pubserver.send_string(
                                 json.dumps({'type': 'user.changes.future',
                                             'data': str(pickle.dumps(response['params']['data']))}))
@@ -224,5 +170,5 @@ class DeribitMD(ServiceBase):
 
     
 if __name__ == '__main__':
-    service = DeribitMD('deribit-md', 'deribit-future-md')
-    start_service(service, {'port': 9000, 'ip': 'localhost'})
+    service = DeribitMD('deribit-future-md', 'deribit-future-md')
+    start_service(service, {})
