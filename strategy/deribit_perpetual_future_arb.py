@@ -61,7 +61,7 @@ class FutureArbitrage(ServiceBase):
                 await self.deribittdreq.send_string(json.dumps({
                     'accountid': DERIBIT_ACCOUNT_ID, 'method': 'sell',
                     'params': {'instrument_name': SEASON_FUTURE,
-                               'amount': SIZE_PER_TRADE,
+                               'amount': min(SIZE_PER_TRADE, perpetual[3]),
                                'type': 'limit',
                                'price': max(future[2] - 0.5, future[0] + 0.5),
                                'post_only': True, }
@@ -75,7 +75,7 @@ class FutureArbitrage(ServiceBase):
                 await self.deribittdreq.send_string(json.dumps({
                     'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
                     'params': {'order_id': current_order['order_id'],
-                               'amount': current_order['amount'] - current_order['filled_amount'],
+                               'amount': min(SIZE_PER_TRADE, perpetual[3]),
                                'price': max(future[2] - 0.5, future[0] + 0.5),
                                'post_only': True, }
                 }))
@@ -99,7 +99,7 @@ class FutureArbitrage(ServiceBase):
                 await self.deribittdreq.send_string(json.dumps({
                     'accountid': DERIBIT_ACCOUNT_ID, 'method': 'buy',
                     'params': {'instrument_name': SEASON_FUTURE,
-                               'amount': min(SIZE_PER_TRADE, abs(future_size)),
+                               'amount': min(SIZE_PER_TRADE, abs(future_size), perpetual[1]),
                                'type': 'limit',
                                'price': min(future[0] + 0.5, future[2] - 0.5),
                                'post_only': True, }
@@ -111,7 +111,7 @@ class FutureArbitrage(ServiceBase):
                 await self.deribittdreq.send_string(json.dumps({
                     'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
                     'params': {'order_id': current_order['order_id'],
-                               'amount': current_order['amount'] - current_order['filled_amount'],
+                               'amount': min(SIZE_PER_TRADE, abs(future_size), perpetual[1]),
                                'price': min(future[0] + 0.5, future[2] - 0.5),
                                'post_only': True, }
                 }))
