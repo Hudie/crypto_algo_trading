@@ -60,12 +60,12 @@ unsubscribe = {
 
 MSG_HEARTBEAT_ID = 110
 heartbeat = {
-    "method": "public/set_heartbeat",
-    "params": {
-        "interval": 10
+    "method" : "public/set_heartbeat",
+    "params" : {
+        "interval" : 10
     },
-    "jsonrpc": "2.0",
-    "id": MSG_HEARTBEAT_ID
+    "jsonrpc" : "2.0",
+    "id" : MSG_HEARTBEAT_ID
 }
 
 MSG_TEST_ID = 8212

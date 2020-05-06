@@ -33,12 +33,12 @@ auth = {
 
 MSG_HEARTBEAT_ID = 110
 heartbeat = {
-    "method": "public/set_heartbeat",
-    "params": {
-        "interval": 10
+    "method" : "public/set_heartbeat",
+    "params" : {
+        "interval" : 10
     },
-    "jsonrpc": "2.0",
-    "id": MSG_HEARTBEAT_ID
+    "jsonrpc" : "2.0",
+    "id" : MSG_HEARTBEAT_ID
 }
 
 MSG_TEST_ID = 8212
@@ -170,13 +170,11 @@ class DeribitTD(ServiceBase):
                                 self.pubserver.send_string(json.dumps({
                                     'accountid': account.id,
                                     'type': 'user.portfolio',
-                                    # 'data': str(pickle.dumps(response['params']['data']))}))
                                     'data': response['params']['data']}))
                             elif response['params']['channel'].startswith('user.changes.future'):
                                 self.pubserver.send_string(json.dumps({
                                     'accountid': account.id,
                                     'type': 'user.changes.future',
-                                    # 'data': str(pickle.dumps(response['params']['data']))}))
                                     'data': response['params']['data']}))
                             else:
                                 pass
@@ -226,8 +224,8 @@ class DeribitTD(ServiceBase):
             for account in accounts:
                 asyncio.ensure_future(self.pub_msg(account))
                 # fetch account info, including orders and pos
-                requests[account.id] = queue.Queue()
-                requests[account.id].put({'method': 'get_positions', 'params': {'currency': 'BTC', 'kind': 'future'}})
+                # requests[account.id] = queue.Queue()
+                # requests[account.id].put({'method': 'get_positions', 'params': {'currency': 'BTC', 'kind': 'future'}})
                 
             asyncio.ensure_future(self.on_request())
 
