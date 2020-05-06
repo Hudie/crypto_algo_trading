@@ -5,11 +5,9 @@ import zmq.asyncio
 import asyncio
 import json
 import pickle
+from crypto_trading.config import *
 
 
-
-DERIBIT_ACCOUNT_ID = 'mogu1988'
-SEASON_FUTURE = 'BTC-26JUN20'
 
 SIZE_PER_TRADE = 1000
 TX_ENTRY_GAP = [42, 52, 62, 72, 82, 92, 102, 112, 122, 132]
@@ -144,6 +142,7 @@ class FutureArbitrage(ServiceBase):
                     elif quote['sym'] == SEASON_FUTURE:
                         future = [quote['bid_prices'][0], quote['bid_sizes'][0], quote['ask_prices'][0], quote['ask_sizes'][0]]
                     await self.find_quotes_gap()
+                '''
                 elif msg['type'] == 'user.portfolio':
                     portfolio = pickle.loads(eval(msg['data']))
                     deribit_margin = [portfolio['equity'], portfolio['initial_margin'], portfolio['maintenance_margin']]
@@ -171,7 +170,7 @@ class FutureArbitrage(ServiceBase):
                     elif changes['instrument_name'] == 'BTC-PERPETUAL':
                         if changes['positions']:
                             perpetual_size = changes['positions'][0]['size']
-
+                '''
         except Exception as e:
             self.logger.exception(e)
 
@@ -187,6 +186,9 @@ class FutureArbitrage(ServiceBase):
             
             while self.state == ServiceState.started:
                 msg = json.loads(await self.deribittd.recv_string())
+                if msg['accountid'] != DERIBIT_ACCOUNT_ID:
+                    continue
+                
                 if msg['type'] == 'positions':
                     data = msg['data']
                     for d in data:
@@ -194,6 +196,35 @@ class FutureArbitrage(ServiceBase):
                             future_size = d['size']
                         elif d['instrument_name'] == 'BTC-PERPETUAL':
                             perpetual_size = d['size']
+                elif msg['type'] == 'user.portfolio':
+                    portfolio = pickle.loads(eval(msg['data']))
+                    deribit_margin = [portfolio['equity'], portfolio['initial_margin'], portfolio['maintenance_margin']]
+                elif msg['type'] == 'user.changes.future':
+                    changes = pickle.loads(eval(msg['data']))
+                    self.logger.info(changes)
+                    if changes['instrument_name'] == SEASON_FUTURE:
+                        if changes['trades']:
+                            future_filled = sum([tx['amount'] for tx in changes['trades']])
+                            await self.deribittdreq.send_string(json.dumps({
+                                'accountid': DERIBIT_ACCOUNT_ID, 'method': 'buy' if changes['trades'][0]['direction'] == 'sell' else 'sell',
+                                'params': {'instrument_name': 'BTC-PERPETUAL', 'amount': future_filled, 'type': 'market',}
+                            }))
+                            await self.deribittdreq.recv_string()
+                        if all([True if o['order_state'] in ('filled', 'cancelled') else False for o in changes['orders']]) or not changes['orders']:
+                            can_place_order = True
+                            if_order_cancelling = False
+                            current_order = {}
+                        else:
+                            can_place_order = False
+                            if_price_changing = False
+                            current_order = changes['orders'][0]
+                        if changes['positions']:
+                            future_size = changes['positions'][0]['size']
+                    elif changes['instrument_name'] == 'BTC-PERPETUAL':
+                        if changes['positions']:
+                            perpetual_size = changes['positions'][0]['size']
+                else:
+                    pass
         except Exception as e:
             self.logger.exception(e)
                 

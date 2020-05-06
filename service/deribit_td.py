@@ -9,6 +9,7 @@ import websockets
 import json
 import time
 import queue
+import pickle
 from crypto_trading.config import *
 
 
@@ -46,6 +47,17 @@ test = {
     "id" : MSG_TEST_ID,
     "method" : "public/test",
     "params" : {}
+}
+
+MSG_PRIVATE_SUBSCRIBE_ID = 4235
+private_subscribe = {
+    "jsonrpc" : "2.0",
+    "id" : MSG_PRIVATE_SUBSCRIBE_ID,
+    "method" : "private/subscribe",
+    "params" : {
+        "channels" : [
+        ]
+    }
 }
 
 MSG_GET_POSITIONS_ID 	= 2236
@@ -108,6 +120,11 @@ class DeribitTD(ServiceBase):
                 await websocket.send(json.dumps(auth))
                 res = json.loads(await websocket.recv())
                 tokens[account.id] = res['result']['access_token']
+
+                # private subscribe
+                private_subscribe['params']['channels'] = ['user.portfolio.{}'.format(SYMBOL),
+                                                           'user.changes.future.{}.raw'.format(SYMBOL)]
+                await websocket.send(json.dumps(private_subscribe))
                 
                 # it is very important here to use 'self.state' to control start/stop!!!
                 lastheartbeat = time.time()
@@ -141,15 +158,26 @@ class DeribitTD(ServiceBase):
                                 lastheartbeat = time.time()
                             # else:
                             #    self.logger.info('Serverside heartbeat: ' + str(response))
-                        elif response.get('id', '') in (MSG_TEST_ID, ):
+                        elif response.get('id', '') in (MSG_TEST_ID, MSG_PRIVATE_SUBSCRIBE_ID, ):
                             pass
+                        elif str(response.get('id', '')) in MSG_MAP.keys():
+                            await self.pubserver.send_string(json.dumps({
+                                'accountid': account.id,
+                                'type': MSG_MAP[str(response.get('id'))],
+                                'data': response.get('result', {})}))
                         else:
-                            # deal with tx response
-                            if str(response.get('id', '')) in MSG_MAP.keys():
-                                await self.pubserver.send_string(json.dumps({
+                            if response['params']['channel'].startswith('user.portfolio'):
+                                self.pubserver.send_string(json.dumps({
                                     'accountid': account.id,
-                                    'type': MSG_MAP[str(response.get('id'))],
-                                    'data': response.get('result', {})}))
+                                    'type': 'user.portfolio',
+                                    'data': str(pickle.dumps(response['params']['data']))}))
+                            elif response['params']['channel'].startswith('user.changes.future'):
+                                self.pubserver.send_string(json.dumps({
+                                    'accountid': account.id,
+                                    'type': 'user.changes.future',
+                                    'data': str(pickle.dumps(response['params']['data']))}))
+                            else:
+                                pass
                 else:
                     if self.state == ServiceState.started:
                         await self.pub_msg(account)
@@ -196,9 +224,8 @@ class DeribitTD(ServiceBase):
             for account in accounts:
                 asyncio.ensure_future(self.pub_msg(account))
                 # fetch account info, including orders and pos
-                # requests[account.id] = queue.Queue()
-                # requests[account.id].put({'method': 'get_positions', 'params': {'currency': 'BTC', 'kind': 'option'}})
-                # requests[account.id].put({'method': 'get_open_orders_by_currency', 'params': {'currency' : 'BTC'}})
+                requests[account.id] = queue.Queue()
+                requests[account.id].put({'method': 'get_positions', 'params': {'currency': 'BTC', 'kind': 'future'}})
                 
             asyncio.ensure_future(self.on_request())
 
