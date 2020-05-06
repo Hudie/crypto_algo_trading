@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from crypto_foundation.common.constant import Ecn, Broker, MarketDataApi, TradeDataApi
+from crypto_foundation.common.constant import Broker, MarketDataApi, TradeDataApi
 from crypto_foundation.common.account import CryptoTradingAccount
 from base import ServiceState, ServiceBase, start_service
 import zmq.asyncio
@@ -9,10 +9,10 @@ import websockets
 import json
 import time
 import queue
+from crypto_trading.config import *
 
 
 
-orders = {}
 tokens = {}
 accounts = []
 # key: accountid, value: request queue
@@ -57,6 +57,17 @@ MSG_CANCEL_ID		= 4214
 MSG_CANCEL_ALL_ID	= 8748
 MSG_GET_ORDER_STATE_ID	= 4316
 MSG_GET_OPEN_ORDERS_BY_CURRENCY_ID	= 1953
+
+MSG_MAP = {str(MSG_GET_POSITIONS_ID): 'positions',
+           str(MSG_GET_POSITION_ID): 'position',
+           str(MSG_BUY_ID): 'buy',
+           str(MSG_SELL_ID): 'sell',
+           str(MSG_EDIT_ID): 'edit',
+           str(MSG_CANCEL_ID): 'cancel',
+           str(MSG_CANCEL_ALL_ID): 'cancel_all',
+           str(MSG_GET_ORDER_STATE_ID): 'order_state',
+           str(MSG_GET_OPEN_ORDERS_BY_CURRENCY_ID): 'open_orders',
+}
 
 def get_random_id():
     count = 0
@@ -117,7 +128,6 @@ class DeribitTD(ServiceBase):
                             lastheartbeat = time.time()
 
                     # then deal with every received msg
-                    # task = asyncio.create_task(websocket.recv())
                     task = asyncio.ensure_future(websocket.recv())
                     done, pending = await asyncio.wait({task}, timeout=1)
                     for t in pending:
@@ -134,55 +144,12 @@ class DeribitTD(ServiceBase):
                         elif response.get('id', '') in (MSG_TEST_ID, ):
                             pass
                         else:
-                            # deal tx response
-                            # self.logger.info(response)
-                            if response.get('id', '') == MSG_GET_OPEN_ORDERS_BY_CURRENCY_ID:
+                            # deal with tx response
+                            if str(response.get('id', '')) in MSG_MAP.keys():
                                 await self.pubserver.send_string(json.dumps({
                                     'accountid': account.id,
-                                    'type': 'open_orders',
-                                    'data': response['result']}))
-                            elif response.get('id', '') == MSG_GET_POSITION_ID:
-                                await self.pubserver.send_string(json.dumps({
-                                    'accountid': account.id,
-                                    'type': 'position',
-                                    'data': response['result']}))
-                            elif response.get('id', '') == MSG_GET_POSITIONS_ID:
-                                await self.pubserver.send_string(json.dumps({
-                                    'accountid': account.id,
-                                    'type': 'positions',
-                                    'data': response['result']}))
-                            elif response.get('id', '') == MSG_GET_ORDER_STATE_ID:
-                                await self.pubserver.send_string(json.dumps({
-                                    'accountid': account.id,
-                                    'type': 'order_state',
-                                    'data': response['result']}))
-                            elif response.get('id', '') == MSG_CANCEL_ID:
-                                await self.pubserver.send_string(json.dumps({
-                                    'accountid': account.id,
-                                    'type': 'cancel',
-                                    'data': response['result']}))
-                            elif response.get('id', '') == MSG_CANCEL_ALL_ID:
-                                await self.pubserver.send_string(json.dumps({
-                                    'accountid': account.id,
-                                    'type': 'cancel_all',
+                                    'type': MSG_MAP[str(response.get('id'))],
                                     'data': response.get('result', {})}))
-                            elif response.get('id', '') == MSG_BUY_ID:
-                                await self.pubserver.send_string(json.dumps({
-                                    'accountid': account.id,
-                                    'type': 'buy',
-                                    'data': response['result']}))
-                            elif response.get('id', '') == MSG_SELL_ID:
-                                await self.pubserver.send_string(json.dumps({
-                                    'accountid': account.id,
-                                    'type': 'sell',
-                                    'data': response['result']}))
-                            elif response.get('id', '') == MSG_EDIT_ID:
-                                await self.pubserver.send_string(json.dumps({
-                                    'accountid': account.id,
-                                    'type': 'edit',
-                                    'data': response.get('result', {})}))
-                            else:
-                                pass
                 else:
                     if self.state == ServiceState.started:
                         await self.pub_msg(account)
@@ -203,15 +170,8 @@ class DeribitTD(ServiceBase):
                 msg = json.loads(await self.repserver.recv_string())
                 internalid = ':'.join([msg.get('sid', ''), msg.get('userid', ''), msg['accountid'], next(randomid)])
                 await self.repserver.send_string(json.dumps({'internalid': internalid}))
-
                 # msg['params'].update({'label': internalid})
-                # self.logger.info('**** Request received:')
-                # self.logger.info(msg)
-                '''
-                if msg['accountid'] not in orders:
-                    orders[msg['accountid']] = []
-                orders[msg['accountid']].append(msg)
-                '''
+
                 if msg['accountid'] not in requests:
                     requests[msg['accountid']] = queue.Queue()
                 requests[msg['accountid']].put({'method': msg['method'], 'params': msg['params']})
@@ -226,27 +186,24 @@ class DeribitTD(ServiceBase):
         else:
             self.state = ServiceState.started
             # init account info
-            mogu = CryptoTradingAccount("mogu1988",
-                                        Broker.deribit_dma, "mogu1988", "",
-                                        MarketDataApi.deribit_md_websocket,
-                                        TradeDataApi.deribit_td_websocket,
-                                        "PmyJIl5T", "7WBI4N_YT8YB5nAFq1VjPFedLMxGfrxxCbreMFOYLv0")
-            accounts.append(mogu)
-            
+            single = CryptoTradingAccount(DERIBIT_ACCOUNT_ID,
+                                          Broker.deribit_dma, DERIBIT_ACCOUNT_ID, '',
+                                          MarketDataApi.deribit_md_websocket,
+                                          TradeDataApi.deribit_td_websocket,
+                                          DERIBIT_CLIENT_ID, DERIBIT_CLIENT_SECRET)
+            accounts.append(single)
             # create websocket for every account
             for account in accounts:
-                # asyncio.create_task(self.pub_msg(account))
                 asyncio.ensure_future(self.pub_msg(account))
                 # fetch account info, including orders and pos
                 # requests[account.id] = queue.Queue()
                 # requests[account.id].put({'method': 'get_positions', 'params': {'currency': 'BTC', 'kind': 'option'}})
                 # requests[account.id].put({'method': 'get_open_orders_by_currency', 'params': {'currency' : 'BTC'}})
                 
-            # await self.on_request()
             asyncio.ensure_future(self.on_request())
 
 
     
 if __name__ == '__main__':
     service = DeribitTD('deribit-td', 'deribit-td')
-    start_service(service, {'port': 9010, 'ip': 'localhost'})
+    start_service(service, {})

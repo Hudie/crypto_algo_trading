@@ -7,15 +7,12 @@ import websockets
 import json
 import pickle
 import time
+from crypto_trading.config import *
 
 
 
 activechannels = set()
 hourlyupdated = False
-
-DERIBIT_CLIENT_ID = "PmyJIl5T"
-DERIBIT_CLIENT_SECRET = "7WBI4N_YT8YB5nAFq1VjPFedLMxGfrxxCbreMFOYLv0"
-SYMBOL = 'BTC'
 
 MSG_AUTH_ID = 9929
 auth = {
@@ -36,7 +33,6 @@ subscribe = {
     "method" : "public/subscribe",
     "params" : {
         "channels" : [
-            #"ticker.BTC-11OCT19-9750-C.raw",
         ]
     }
 }
@@ -114,7 +110,7 @@ class DeribitMD(ServiceBase):
                 await websocket.recv()
                 
                 await websocket.send(json.dumps(auth))
-                res = json.loads(await websocket.recv())
+                await websocket.recv()
                 # self.logger.info(res)
                 # get instruments and then update channels
                 await websocket.send(json.dumps(instruments))
@@ -126,9 +122,10 @@ class DeribitMD(ServiceBase):
                         activechannels.add('.'.join([j, i['instrument_name'], 'raw']))
                 subscribe['params']['channels'] = list(activechannels)
                 await websocket.send(json.dumps(subscribe))
-                res = json.loads(await websocket.recv())
+                await websocket.recv()
                 
-                private_subscribe['params']['channels'] = ['user.portfolio.BTC', 'user.changes.future.BTC.raw']
+                private_subscribe['params']['channels'] = ['user.portfolio.{}'.format(SYMBOL),
+                                                           'user.changes.future.{}.raw'.format(SYMBOL)]
                 await websocket.send(json.dumps(private_subscribe))
                 
                 hourlyupdated = True
@@ -225,5 +222,5 @@ class DeribitMD(ServiceBase):
 
     
 if __name__ == '__main__':
-    service = DeribitMD('deribit-md', 'deribit-future-md')
-    start_service(service, {'port': 9000, 'ip': 'localhost'})
+    service = DeribitMD('deribit-future-md', 'deribit-future-md')
+    start_service(service, {})
