@@ -109,9 +109,6 @@ class DeribitMD(ServiceBase):
                 await websocket.send(json.dumps(heartbeat))
                 await websocket.recv()
                 
-                await websocket.send(json.dumps(auth))
-                await websocket.recv()
-                # self.logger.info(res)
                 # get instruments and then update channels
                 await websocket.send(json.dumps(instruments))
                 response = json.loads(await websocket.recv())
@@ -122,15 +119,9 @@ class DeribitMD(ServiceBase):
                         activechannels.add('.'.join([j, i['instrument_name'], 'raw']))
                 subscribe['params']['channels'] = list(activechannels)
                 await websocket.send(json.dumps(subscribe))
-                await websocket.recv()
                 
-                private_subscribe['params']['channels'] = ['user.portfolio.{}'.format(SYMBOL),
-                                                           'user.changes.future.{}.raw'.format(SYMBOL)]
-                await websocket.send(json.dumps(private_subscribe))
-                
-                hourlyupdated = True
-
                 # it is very important here to use 'self.state' to control start/stop!!!
+                hourlyupdated = True
                 lastheartbeat = time.time()
                 while websocket.open and self.state == ServiceState.started:
                     # check heartbeat to see if websocket is broken
@@ -162,8 +153,8 @@ class DeribitMD(ServiceBase):
                             for j in ('trades', 'ticker', 'book'):
                                 newchannels.add('.'.join([j, i['instrument_name'], 'raw']))
                         if len(newchannels.difference(activechannels)) > 0:
-                            # self.logger.info('There are new channels as following:')
-                            # self.logger.info(str(newchannels.difference(activechannels)))
+                            self.logger.info('There are new channels as following:')
+                            self.logger.info(str(newchannels.difference(activechannels)))
                             subscribe['params']['channels'] = list(newchannels)
                             await websocket.send(json.dumps(subscribe))
                             unsubscribe['params']['channels'] = list(activechannels.difference(newchannels))
@@ -192,15 +183,6 @@ class DeribitMD(ServiceBase):
                             self.pubserver.send_string(
                                 json.dumps({'type': 'book',
                                             'data': str(pickle.dumps(parse_deribit_order_book(response['params']['data'])))}))
-                        elif response['params']['channel'].startswith('user.portfolio'):
-                            # self.logger.info(response['params']['data'])
-                            self.pubserver.send_string(
-                                json.dumps({'type': 'user.portfolio',
-                                            'data': str(pickle.dumps(response['params']['data']))}))
-                        elif response['params']['channel'].startswith('user.changes.future'):
-                            self.pubserver.send_string(
-                                json.dumps({'type': 'user.changes.future',
-                                            'data': str(pickle.dumps(response['params']['data']))}))
                         else:
                             pass
                 else:

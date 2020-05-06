@@ -170,12 +170,14 @@ class DeribitTD(ServiceBase):
                                 self.pubserver.send_string(json.dumps({
                                     'accountid': account.id,
                                     'type': 'user.portfolio',
-                                    'data': str(pickle.dumps(response['params']['data']))}))
+                                    # 'data': str(pickle.dumps(response['params']['data']))}))
+                                    'data': response['params']['data']}))
                             elif response['params']['channel'].startswith('user.changes.future'):
                                 self.pubserver.send_string(json.dumps({
                                     'accountid': account.id,
                                     'type': 'user.changes.future',
-                                    'data': str(pickle.dumps(response['params']['data']))}))
+                                    # 'data': str(pickle.dumps(response['params']['data']))}))
+                                    'data': response['params']['data']}))
                             else:
                                 pass
                 else:
