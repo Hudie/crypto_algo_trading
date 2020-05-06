@@ -50,6 +50,7 @@ class FutureArbitrage(ServiceBase):
         try:
             global perpetual, future, can_place_order, if_order_cancelling, if_price_changing, current_order, future_size
 
+            # self.logger.info('--- future size: {} & perpetual size: {} ---'.format(future_size, perpetual_size))
             gap = max(future[2] - perpetual[2], perpetual[0] - future[0])
             gap_idx = max(sum([1 if gap >= i else 0 for i in TX_ENTRY_GAP]) - 1, 0)
             can_entry = False if max(abs(future_size), abs(perpetual_size)) >= POSITION_SIZE_THRESHOLD[gap_idx] else True

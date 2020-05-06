@@ -117,7 +117,6 @@ class DeribitMD(ServiceBase):
                 res = json.loads(await websocket.recv())
                 # self.logger.info(res)
                 # get instruments and then update channels
-                '''
                 await websocket.send(json.dumps(instruments))
                 response = json.loads(await websocket.recv())
                 for i in response['result']:
@@ -128,7 +127,7 @@ class DeribitMD(ServiceBase):
                 subscribe['params']['channels'] = list(activechannels)
                 await websocket.send(json.dumps(subscribe))
                 res = json.loads(await websocket.recv())
-                '''
+                
                 private_subscribe['params']['channels'] = ['user.portfolio.BTC', 'user.changes.future.BTC.raw']
                 await websocket.send(json.dumps(private_subscribe))
                 
@@ -142,7 +141,6 @@ class DeribitMD(ServiceBase):
                         raise websockets.exceptions.ConnectionClosedError(1003, 'Serverside heartbeat stopped')
                     
                     # update instruments every hour
-                    '''
                     if time.gmtime().tm_min == 5 and hourlyupdated == False:
                         # self.logger.info('Fetching instruments hourly ******')
                         await websocket.send(json.dumps(instruments))
@@ -151,7 +149,6 @@ class DeribitMD(ServiceBase):
                         hourlyupdated = False
                     else:
                         pass
-                    '''
                     
                     response = json.loads(await websocket.recv())
                     # need response heartbeat to keep alive
