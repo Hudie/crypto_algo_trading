@@ -18,6 +18,7 @@ can_place_order = True
 if_order_cancelling = False
 if_price_changing = False
 current_order = {}
+current_order_idx = 0
 
 
 class FutureArbitrage(ServiceBase):
@@ -40,12 +41,15 @@ class FutureArbitrage(ServiceBase):
     async def find_quotes_gap(self):
         try:
             global perpetual, future, can_place_order, if_order_cancelling, if_price_changing, current_order, future_size
+            global current_order_idx
 
-            # self.logger.info('--- future size: {} & perpetual size: {} ---'.format(future_size, perpetual_size))
             gap = max(future[2] - perpetual[2], perpetual[0] - future[0])
             gap_idx = max(sum([1 if gap >= i else 0 for i in TX_ENTRY_GAP]) - 1, 0)
             can_entry = False if max(abs(future_size), abs(perpetual_size)) >= POSITION_SIZE_THRESHOLD[gap_idx] else True
             can_exit = False if min(abs(future_size), abs(perpetual_size)) <= 100 else True
+
+            # self.logger.info('gap_idx: {}, can_place_order: {}, if_order_cancelling: {}, if_price_changing: {}'.format(
+            #     gap_idx, can_place_order, if_order_cancelling, if_price_changing))
             
             # future > perpetual entry point
             if future[2] - perpetual[2] >= TX_ENTRY_GAP[gap_idx] and can_place_order and can_entry:
@@ -58,9 +62,10 @@ class FutureArbitrage(ServiceBase):
                                'post_only': True, }
                 }))
                 self.deribittdreq.recv_string()
+                current_order_idx = gap_idx
                 can_place_order = False
             # future > perpetual entry point: change limit order price
-            elif all((perpetual[2] + TX_ENTRY_GAP[gap_idx] - TX_ENTRY_GAP_CANCEL_DELTA <= future[2] < current_order.get('price', 0),
+            elif all((perpetual[2] + TX_ENTRY_GAP[max(gap_idx, current_order_idx)] - TX_ENTRY_GAP_CANCEL_DELTA <= future[2] < current_order.get('price', 0),
                       not if_price_changing)):
                 self.logger.info('---- change price to: {} ----'.format(max(future[2] - 0.5, future[0] + 0.5)))
                 self.deribittdreq.send_string(json.dumps({
@@ -76,7 +81,7 @@ class FutureArbitrage(ServiceBase):
             elif perpetual[0] - future[0] >= TX_ENTRY_GAP[gap_idx] and can_place_order and can_entry:
                 pass
             # cancel orders in this area
-            elif all((max(future[2] - perpetual[2], perpetual[0] - future[0]) < TX_ENTRY_GAP[gap_idx] - TX_ENTRY_GAP_CANCEL_DELTA,
+            elif all((max(future[2] - perpetual[2], perpetual[0] - future[0]) < TX_ENTRY_GAP[max(gap_idx, current_order_idx)] - TX_ENTRY_GAP_CANCEL_DELTA,
                       max(future[0] - perpetual[0], perpetual[2] - future[2]) > TX_EXIT_GAP_CANCEL,
                       not can_place_order,
                       not if_order_cancelling)):
@@ -85,6 +90,7 @@ class FutureArbitrage(ServiceBase):
                 }))
                 self.deribittdreq.recv_string()
                 if_order_cancelling = True
+                current_order_idx = 0
             # future > perpetual exit point
             elif future[0] - perpetual[0] <= TX_EXIT_GAP and future_size < 0 and can_exit and can_place_order:
                 self.deribittdreq.send_string(json.dumps({
@@ -178,20 +184,20 @@ class FutureArbitrage(ServiceBase):
                                 'params': {'instrument_name': 'BTC-PERPETUAL', 'amount': future_filled, 'type': 'market',}
                             }))
                             self.deribittdreq.recv_string()
+                            if future_filled == current_order['amount'] - current_order['filled_amount']:
+                                can_place_order = True
                         if all([True if o['order_state'] in ('filled', 'cancelled') else False for o in changes['orders']]) or not changes['orders']:
                             can_place_order = True
-                            if_order_cancelling = False
-                            if_price_changing = False
                             current_order = {}
                         else:
-                            can_place_order = False
-                            if_price_changing = False
                             current_order = changes['orders'][0]
                         if changes['positions']:
                             future_size = changes['positions'][0]['size']
                     elif changes['instrument_name'] == 'BTC-PERPETUAL':
                         if changes['positions']:
                             perpetual_size = changes['positions'][0]['size']
+                    if_order_cancelling = False
+                    if_price_changing = False
                 else:
                     pass
         except Exception as e:
