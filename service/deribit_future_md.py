@@ -169,7 +169,7 @@ class DeribitMD(ServiceBase):
                             activechannels = newchannels
                     elif response.get('id', '') in (MSG_TEST_ID, MSG_SUBSCRIBE_ID, MSG_UNSUBSCRIBE_ID, MSG_PRIVATE_SUBSCRIBE_ID):
                         pass
-                    else:
+                    elif response.get('params', ''):
                         # self.logger.info(str(response['params']['data']))
                         if response['params']['channel'].startswith('trades'):
                             for i in response['params']['data']:
@@ -185,6 +185,8 @@ class DeribitMD(ServiceBase):
                                             'data': str(pickle.dumps(parse_deribit_order_book(response['params']['data'])))}))
                         else:
                             pass
+                    else:
+                        pass
                 else:
                     if self.state == ServiceState.started:
                         await self.pub_msg()
