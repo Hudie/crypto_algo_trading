@@ -99,6 +99,7 @@ class FutureArbitrage(ServiceBase):
                 can_place_order = False
             # future > perpetual exit point: change limit order price
             elif current_order.get('price', 999999) < future[0] <= perpetual[0] + TX_EXIT_GAP_CANCEL and not if_price_changing:
+                self.logger.info('---- change price to: {} ----'.format(min(future[0] + 0.5, future[2] - 0.5)))
                 await self.deribittdreq.send_string(json.dumps({
                     'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
                     'params': {'order_id': current_order['order_id'],
@@ -180,6 +181,7 @@ class FutureArbitrage(ServiceBase):
                         if all([True if o['order_state'] in ('filled', 'cancelled') else False for o in changes['orders']]) or not changes['orders']:
                             can_place_order = True
                             if_order_cancelling = False
+                            if_price_changing = False
                             current_order = {}
                         else:
                             can_place_order = False
