@@ -198,7 +198,7 @@ class DeribitTD(ServiceBase):
                 msg = json.loads(await self.repserver.recv_string())
                 internalid = ':'.join([msg.get('sid', ''), msg.get('userid', ''), msg['accountid'], next(randomid)])
                 await self.repserver.send_string(json.dumps({'internalid': internalid}))
-                # msg['params'].update({'label': internalid})
+                msg['params'].update({'label': internalid})
 
                 if msg['accountid'] not in requests:
                     requests[msg['accountid']] = queue.Queue()

@@ -49,10 +49,11 @@ class FutureArbitrage(ServiceBase):
             can_exit = False if min(abs(future_size), abs(perpetual_size)) <= 100 else True
 
             # self.logger.info('gap_idx: {}, can_place_order: {}, if_order_cancelling: {}, if_price_changing: {}'.format(
-            #     gap_idx, can_place_order, if_order_cancelling, if_price_changing))
+            #    gap_idx, can_place_order, if_order_cancelling, if_price_changing))
             
             # future > perpetual entry point
             if future[2] - perpetual[2] >= TX_ENTRY_GAP[gap_idx] and can_place_order and can_entry:
+                self.logger.info(' ** order gap: {}'.format(future[2] - perpetual[2]))
                 self.deribittdreq.send_string(json.dumps({
                     'accountid': DERIBIT_ACCOUNT_ID, 'method': 'sell',
                     'params': {'instrument_name': SEASON_FUTURE,
@@ -170,12 +171,38 @@ class FutureArbitrage(ServiceBase):
                             future_size = d['size']
                         elif d['instrument_name'] == 'BTC-PERPETUAL':
                             perpetual_size = d['size']
+                elif msg['type'] in ('buy', 'sell',):
+                    self.logger.info('-- td res: {}: {}'.format(msg['type'], msg['data']))
+                    data = msg['data']
+                    if data['order']['instrument_name'] == SEASON_FUTURE:
+                        current_order = data['order']
+                    elif data['order']['instrument_name'] == 'BTC-PERPETUAL' and current_order:
+                        self.deribittdreq.send_string(json.dumps({
+                            'accountid': DERIBIT_ACCOUNT_ID, 'method': 'get_order_state',
+                            'params': {'order_id': current_order['order_id']}
+                        }))
+                        self.deribittdreq.recv_string()
+                elif msg['type'] == 'order_state':
+                    self.logger.info('-- td res: {}: {}'.format(msg['type'], msg['data']))
+                    if  msg['data']['order_state'] in ('filled', 'cancelled'):
+                        current_order = {}
+                        can_place_order = True
+                    else:
+                        current_order = msg['data']
+                elif msg['type'] in ('edit', ):
+                    if_price_changing = False
+                    if msg['data']:
+                        current_order = msg['data']['order']
+                    # self.logger.info('-- td res: {}: {}'.format(msg['type'], msg['data']))
+                elif msg['type'] in ('cancel_all', ):
+                    if_order_cancelling = False
+                    self.logger.info('-- td res: {}: {}'.format(msg['type'], msg['data']))
                 elif msg['type'] == 'user.portfolio':
                     portfolio = msg['data']
                     deribit_margin = [portfolio['equity'], portfolio['initial_margin'], portfolio['maintenance_margin']]
                 elif msg['type'] == 'user.changes.future':
                     changes = msg['data']
-                    self.logger.info(changes)
+                    # self.logger.info(changes)
                     if changes['instrument_name'] == SEASON_FUTURE:
                         if changes['trades']:
                             future_filled = sum([tx['amount'] for tx in changes['trades']])
@@ -184,8 +211,6 @@ class FutureArbitrage(ServiceBase):
                                 'params': {'instrument_name': 'BTC-PERPETUAL', 'amount': future_filled, 'type': 'market',}
                             }))
                             self.deribittdreq.recv_string()
-                            if future_filled == current_order['amount'] - current_order['filled_amount']:
-                                can_place_order = True
                         if all([True if o['order_state'] in ('filled', 'cancelled') else False for o in changes['orders']]) or not changes['orders']:
                             can_place_order = True
                             current_order = {}
@@ -196,6 +221,7 @@ class FutureArbitrage(ServiceBase):
                     elif changes['instrument_name'] == 'BTC-PERPETUAL':
                         if changes['positions']:
                             perpetual_size = changes['positions'][0]['size']
+                            # can_place_order = True
                     if_order_cancelling = False
                     if_price_changing = False
                 else:
