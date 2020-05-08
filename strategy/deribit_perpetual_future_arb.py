@@ -95,6 +95,7 @@ class FutureArbitrage(ServiceBase):
                 current_order_idx = 0
             # future > perpetual exit point
             elif future[0] - perpetual[0] <= TX_EXIT_GAP and future_size < 0 and can_exit and can_place_order:
+                self.logger.info(' ** order gap: {}'.format(future[0] - perpetual[0]))
                 self.deribittdreq.send_string(json.dumps({
                     'accountid': DERIBIT_ACCOUNT_ID, 'method': 'buy',
                     'params': {'instrument_name': SEASON_FUTURE,
@@ -174,7 +175,7 @@ class FutureArbitrage(ServiceBase):
                         elif d['instrument_name'] == 'BTC-PERPETUAL':
                             perpetual_size = d['size']
                 elif msg['type'] in ('buy', 'sell',):
-                    self.logger.info('-- td res: {}: {}'.format(msg['type'], msg['data']))
+                    self.logger.info('#### td res: {}: {}'.format(msg['type'], msg['data']))
                     data = msg['data']
                     if data['order']['instrument_name'] == SEASON_FUTURE:
                         current_order = data['order']
@@ -185,7 +186,7 @@ class FutureArbitrage(ServiceBase):
                         }))
                         self.deribittdreq.recv_string()
                 elif msg['type'] == 'order_state':
-                    self.logger.info('-- td res: {}: {}'.format(msg['type'], msg['data']))
+                    # self.logger.info('#### td res: {}: {}'.format(msg['type'], msg['data']))
                     if  msg['data']['order_state'] in ('filled', 'cancelled'):
                         current_order = {}
                         can_place_order = True
@@ -195,11 +196,11 @@ class FutureArbitrage(ServiceBase):
                     if_price_changing = False
                     if msg['data']:
                         current_order = msg['data']['order']
-                    # self.logger.info('-- td res: {}: {}'.format(msg['type'], msg['data']))
+                    # self.logger.info('#### td res: {}: {}'.format(msg['type'], msg['data']))
                 elif msg['type'] in ('cancel', ):
                     current_order = {}
                     if_order_cancelling = False
-                    self.logger.info('-- td res: {}: {}'.format(msg['type'], msg['data']))
+                    self.logger.info('#### td res: {}: {}'.format(msg['type'], msg['data']))
                 elif msg['type'] == 'user.portfolio':
                     portfolio = msg['data']
                     deribit_margin = [portfolio['equity'], portfolio['initial_margin'], portfolio['maintenance_margin']]
@@ -224,11 +225,26 @@ class FutureArbitrage(ServiceBase):
                     elif changes['instrument_name'] == 'BTC-PERPETUAL':
                         if changes['positions']:
                             perpetual_size = changes['positions'][0]['size']
-                            # can_place_order = True
                     if_order_cancelling = False
                     if_price_changing = False
                 else:
                     pass
+        except Exception as e:
+            self.logger.exception(e)
+
+    async def get_current_order_state(self):
+        try:
+            global deribit_margin, perpetual, future, can_place_order, if_order_cancelling, if_price_changing
+            global current_order, future_size, perpetual_size
+            
+            while self.state == ServiceState.started:
+                if current_order.get('order_id', '') not in ('filled', 'cancelled', ''):
+                    self.deribittdreq.send_string(json.dumps({
+                        'accountid': DERIBIT_ACCOUNT_ID, 'method': 'get_order_state',
+                        'params': {'order_id': current_order['order_id']}
+                    }))
+                    self.deribittdreq.recv_string()
+                await asyncio.sleep(10)
         except Exception as e:
             self.logger.exception(e)
                 
@@ -239,6 +255,7 @@ class FutureArbitrage(ServiceBase):
             self.state = ServiceState.started
             asyncio.ensure_future(self.sub_msg_md())
             asyncio.ensure_future(self.sub_msg_td())
+            asyncio.ensure_future(self.get_current_order_state())
 
     
 if __name__ == '__main__':

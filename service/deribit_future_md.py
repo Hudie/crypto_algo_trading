@@ -105,7 +105,7 @@ class DeribitMD(ServiceBase):
             async with websockets.connect('wss://www.deribit.com/ws/api/v2') as websocket:
                 self.logger.info('Connected to deribit websocket server')
                 global activechannels, hourlyupdated
-                # set heartbeats to keep alive
+                # set heartbeat to keep alive
                 await websocket.send(json.dumps(heartbeat))
                 await websocket.recv()
                 
@@ -167,8 +167,6 @@ class DeribitMD(ServiceBase):
                                     self.pubserver.send_string(json.dumps({'type': 'instrument',
                                                                            'data': str(pickle.dumps(parse_deribit_instrument(i)))}))
                             activechannels = newchannels
-                    elif response.get('id', '') in (MSG_TEST_ID, MSG_SUBSCRIBE_ID, MSG_UNSUBSCRIBE_ID, MSG_PRIVATE_SUBSCRIBE_ID):
-                        pass
                     elif response.get('params', ''):
                         # self.logger.info(str(response['params']['data']))
                         if response['params']['channel'].startswith('trades'):

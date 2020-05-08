@@ -156,16 +156,12 @@ class DeribitTD(ServiceBase):
                             if response['params']['type'] == 'test_request':
                                 await websocket.send(json.dumps(test))
                                 lastheartbeat = time.time()
-                            # else:
-                            #    self.logger.info('Serverside heartbeat: ' + str(response))
-                        elif response.get('id', '') in (MSG_TEST_ID, MSG_PRIVATE_SUBSCRIBE_ID, ):
-                            pass
                         elif str(response.get('id', '')) in MSG_MAP.keys():
                             await self.pubserver.send_string(json.dumps({
                                 'accountid': account.id,
                                 'type': MSG_MAP[str(response.get('id'))],
                                 'data': response.get('result', {})}))
-                        else:
+                        elif response.get('params', ''):
                             if response['params']['channel'].startswith('user.portfolio'):
                                 self.pubserver.send_string(json.dumps({
                                     'accountid': account.id,
@@ -178,6 +174,8 @@ class DeribitTD(ServiceBase):
                                     'data': response['params']['data']}))
                             else:
                                 pass
+                        else:
+                            pass
                 else:
                     if self.state == ServiceState.started:
                         await self.pub_msg(account)
@@ -223,7 +221,7 @@ class DeribitTD(ServiceBase):
             # create websocket for every account
             for account in accounts:
                 asyncio.ensure_future(self.pub_msg(account))
-                # fetch account info, including orders and pos
+                # fetch account positions
                 # requests[account.id] = queue.Queue()
                 # requests[account.id].put({'method': 'get_positions', 'params': {'currency': 'BTC', 'kind': 'future'}})
                 
