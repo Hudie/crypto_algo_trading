@@ -48,8 +48,8 @@ class FutureArbitrage(ServiceBase):
             can_entry = False if max(abs(future_size), abs(perpetual_size)) >= POSITION_SIZE_THRESHOLD[gap_idx] else True
             can_exit = False if min(abs(future_size), abs(perpetual_size)) <= 100 else True
 
-            # self.logger.info('gap_idx: {}, can_place_order: {}, if_order_cancelling: {}, if_price_changing: {}'.format(
-            #    gap_idx, can_place_order, if_order_cancelling, if_price_changing))
+            self.logger.info('gap_idx: {}, can_place_order: {}, if_order_cancelling: {}, if_price_changing: {}'.format(
+                gap_idx, can_place_order, if_order_cancelling, if_price_changing))
             
             # future > perpetual entry point
             if future[2] - perpetual[2] >= TX_ENTRY_GAP[gap_idx] and can_place_order and can_entry:
@@ -138,6 +138,7 @@ class FutureArbitrage(ServiceBase):
                 msg = json.loads(await self.deribitmd.recv_string())
                 if msg['type'] == 'quote':
                     quote = pickle.loads(eval(msg['data']))
+                    # self.logger.info('++ quote: {}'.format(quote))
                     if quote['sym'] == 'BTC-PERPETUAL':
                         perpetual = [quote['bid_prices'][0], quote['bid_sizes'][0], quote['ask_prices'][0], quote['ask_sizes'][0]]
                     elif quote['sym'] == SEASON_FUTURE:
