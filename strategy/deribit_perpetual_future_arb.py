@@ -12,8 +12,8 @@ from crypto_trading.config import *
 deribit_margin = [0, 0, 0]
 perpetual = []
 future = []
-future_size = 0
-perpetual_size = 0
+future_size = None
+perpetual_size = None
 can_place_order = True
 if_order_cancelling = False
 if_price_changing = False
@@ -67,7 +67,8 @@ class FutureArbitrage(ServiceBase):
                 can_place_order = False
             # future > perpetual entry point: change limit order price
             elif all((perpetual[2] + TX_ENTRY_GAP[max(gap_idx, current_order_idx)] - TX_ENTRY_GAP_CANCEL_DELTA <= future[2] < current_order.get('price', 0),
-                      not if_price_changing)):
+                      not if_price_changing,
+                      current_order)):
                 self.logger.info('---- entry change price to: {} ----'.format(max(future[2] - 0.5, future[0] + 0.5)))
                 self.deribittdreq.send_string(json.dumps({
                     'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
@@ -80,7 +81,32 @@ class FutureArbitrage(ServiceBase):
                 if_price_changing = True
             # perpetual > future entry point
             elif perpetual[0] - future[0] >= TX_ENTRY_GAP[gap_idx] and can_place_order and can_entry:
-                pass
+                self.logger.info(' **** entry order gap: {}'.format(future[0] - perpetual[0]))
+                self.deribittdreq.send_string(json.dumps({
+                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'buy',
+                    'params': {'instrument_name': SEASON_FUTURE,
+                               'amount': min(SIZE_PER_TRADE, perpetual[1]),
+                               'type': 'limit',
+                               'price': min(future[0] + 0.5, future[2] - 0.5),
+                               'post_only': True, }
+                }))
+                self.deribittdreq.recv_string()
+                current_order_idx = gap_idx
+                can_place_order = False
+            # perpetual > future entry point: change limit order price
+            elif all((perpetual[0] - TX_ENTRY_GAP[max(gap_idx, current_order_idx)] + TX_ENTRY_GAP_CANCEL_DELTA >= future[0] > current_order.get('price', 0),
+                      not if_price_changing,
+                      current_order)):
+                self.logger.info('---- entry change price to: {} ----'.format(min(future[0] + 0.5, future[2] - 0.5)))
+                self.deribittdreq.send_string(json.dumps({
+                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
+                    'params': {'order_id': current_order['order_id'],
+                               'amount': min(SIZE_PER_TRADE, perpetual[1]),
+                               'price': min(future[0] + 0.5, future[2] - 0.5),
+                               'post_only': True, }
+                }))
+                self.deribittdreq.recv_string()
+                if_price_changing = True
             # cancel orders in this area
             elif all((max(future[2] - perpetual[2], perpetual[0] - future[0]) < TX_ENTRY_GAP[max(gap_idx, current_order_idx)] - TX_ENTRY_GAP_CANCEL_DELTA,
                       max(future[0] - perpetual[0], perpetual[2] - future[2]) > TX_EXIT_GAP_CANCEL,
@@ -119,8 +145,30 @@ class FutureArbitrage(ServiceBase):
                 self.deribittdreq.recv_string()
                 if_price_changing = True
             # perpetual > future exit point
-            elif perpetual[2] - future[2] <= TX_EXIT_GAP and future_size > 0 and can_exit:
-                pass
+            elif perpetual[2] - future[2] <= TX_EXIT_GAP and future_size > 0 and can_exit and can_place_order:
+                self.logger.info(' **** exit order gap: {}'.format(perpetual[2] - future[2]))
+                self.deribittdreq.send_string(json.dumps({
+                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'sell',
+                    'params': {'instrument_name': SEASON_FUTURE,
+                               'amount': min(SIZE_PER_TRADE, abs(future_size), perpetual[3]),
+                               'type': 'limit',
+                               'price': max(future[0] + 0.5, future[2] - 0.5),
+                               'post_only': True, }
+                }))
+                self.deribittdreq.recv_string()
+                can_place_order = False
+            # perpetual > future exit point: change limit order price
+            elif current_order.get('price', 0) > future[2] >= perpetual[2] - TX_EXIT_GAP_CANCEL and not if_price_changing:
+                self.logger.info('---- exit change price to: {} ----'.format(max(future[0] + 0.5, future[2] - 0.5)))
+                self.deribittdreq.send_string(json.dumps({
+                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
+                    'params': {'order_id': current_order['order_id'],
+                               'amount': min(SIZE_PER_TRADE, abs(future_size), perpetual[3]),
+                               'price': max(future[0] + 0.5, future[2] - 0.5),
+                               'post_only': True, }
+                }))
+                self.deribittdreq.recv_string()
+                if_price_changing = True
             else:
                 pass
 
@@ -138,7 +186,7 @@ class FutureArbitrage(ServiceBase):
             global deribit_margin, perpetual, future, can_place_order, if_order_cancelling, if_price_changing
             global current_order, future_size, perpetual_size
 
-            await asyncio.sleep(2)
+            # await asyncio.sleep(1)
             while self.state == ServiceState.started:
                 task = asyncio.ensure_future(self.deribitmd.recv_string())
                 done, pending = await asyncio.wait({task}, timeout=2)
@@ -252,11 +300,13 @@ class FutureArbitrage(ServiceBase):
                                 'params': {'instrument_name': 'BTC-PERPETUAL', 'amount': future_filled, 'type': 'market',}
                             }))
                             self.deribittdreq.recv_string()
+                        '''
                         if all([True if o['order_state'] in ('filled', 'cancelled') else False for o in changes['orders']]) or not changes['orders']:
                             can_place_order = True
                             current_order = {}
                         else:
                             current_order = changes['orders'][0]
+                        '''
                 else:
                     pass
         except Exception as e:
