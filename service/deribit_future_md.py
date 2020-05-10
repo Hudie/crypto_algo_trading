@@ -7,6 +7,7 @@ import websockets
 import json
 import pickle
 import time
+import asyncio
 from crypto_trading.config import *
 
 
@@ -63,6 +64,7 @@ heartbeat = {
     "method" : "public/set_heartbeat",
     "params" : {
         "interval" : 10
+        # "interval" : 15
     },
     "jsonrpc" : "2.0",
     "id" : MSG_HEARTBEAT_ID
@@ -125,7 +127,7 @@ class DeribitMD(ServiceBase):
                 lastheartbeat = time.time()
                 while websocket.open and self.state == ServiceState.started:
                     # check heartbeat to see if websocket is broken
-                    if time.time() - lastheartbeat > 15:
+                    if time.time() - lastheartbeat > 30:
                         raise websockets.exceptions.ConnectionClosedError(1003, 'Serverside heartbeat stopped')
                     
                     # update instruments every hour
@@ -140,6 +142,7 @@ class DeribitMD(ServiceBase):
                         pass
                     
                     response = json.loads(await websocket.recv())
+                    # self.logger.info(response)
                     # need response heartbeat to keep alive
                     if response.get('method', '') == 'heartbeat':
                         if response['params']['type'] == 'test_request':
@@ -196,6 +199,7 @@ class DeribitMD(ServiceBase):
         #     await self.pub_msg()
         except Exception as e:
             self.logger.exception(e)
+            await asyncio.sleep(1)
             await self.pub_msg()
 
     async def run(self):

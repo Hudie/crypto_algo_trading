@@ -141,7 +141,7 @@ class FutureArbitrage(ServiceBase):
             await asyncio.sleep(2)
             while self.state == ServiceState.started:
                 task = asyncio.ensure_future(self.deribitmd.recv_string())
-                done, pending = await asyncio.wait({task}, timeout=5)
+                done, pending = await asyncio.wait({task}, timeout=2)
                 for t in pending:
                     t.cancel()
                 msg = json.loads(done.pop().result()) if done else {}
@@ -158,6 +158,11 @@ class FutureArbitrage(ServiceBase):
                         await self.find_quotes_gap()
                 else:
                     self.logger.info('cant receive msg from future md')
+                    self.deribittdreq.send_string(json.dumps({
+                        'accountid': DERIBIT_ACCOUNT_ID, 'method': 'cancel_all', 'params': {}
+                    }))
+                    self.deribittdreq.recv_string()
+                    if_order_cancelling = True
         except Exception as e:
             self.logger.exception(e)
             await self.sub_msg_md()
@@ -225,6 +230,7 @@ class FutureArbitrage(ServiceBase):
                             'accountid': DERIBIT_ACCOUNT_ID, 'method': 'cancel_all', 'params': {}
                         }))
                         self.deribittdreq.recv_string()
+                        if_order_cancelling = True
                 elif msg['type'] == 'edit':
                     if_price_changing = False
                     if msg['data']:
