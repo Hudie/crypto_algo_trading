@@ -125,13 +125,14 @@ class DeribitMD(ServiceBase):
                 lastheartbeat = time.time()
                 while websocket.open and self.state == ServiceState.started:
                     # check heartbeat to see if websocket is broken
-                    if time.time() - lastheartbeat > 30:
+                    if time.time() - lastheartbeat > 15:
                         raise websockets.exceptions.ConnectionClosedError(1003, 'Serverside heartbeat stopped')
                     
                     # update instruments every hour
                     if time.gmtime().tm_min == 5 and hourlyupdated == False:
                         # self.logger.info('Fetching instruments hourly ******')
                         await websocket.send(json.dumps(instruments))
+                        self.logger.info('future md send instruments request')
                         hourlyupdated = True
                     elif time.gmtime().tm_min == 31 and hourlyupdated == True:
                         hourlyupdated = False
@@ -144,6 +145,7 @@ class DeribitMD(ServiceBase):
                         if response['params']['type'] == 'test_request':
                             lastheartbeat = time.time()
                             await websocket.send(json.dumps(test))
+                            self.logger.info('future md send heartbeat test back')
                         else:
                             pass
                             # self.logger.info('Serverside heartbeat: ' + str(response))
@@ -157,8 +159,10 @@ class DeribitMD(ServiceBase):
                             self.logger.info(str(newchannels.difference(activechannels)))
                             subscribe['params']['channels'] = list(newchannels)
                             await websocket.send(json.dumps(subscribe))
+                            self.logger.info('future md send subscribe')
                             unsubscribe['params']['channels'] = list(activechannels.difference(newchannels))
                             await websocket.send(json.dumps(unsubscribe))
+                            self.logger.info('future md send unsubscribe')
                             newinstruments = set()
                             for i in newchannels.difference(activechannels):
                                 newinstruments.add(i.split('.')[1])
