@@ -212,12 +212,18 @@ class DeribitTD(ServiceBase):
         else:
             self.state = ServiceState.started
             # init account info
-            single = CryptoTradingAccount(DERIBIT_ACCOUNT_ID,
-                                          Broker.deribit_dma, DERIBIT_ACCOUNT_ID, '',
-                                          MarketDataApi.deribit_md_websocket,
-                                          TradeDataApi.deribit_td_websocket,
-                                          DERIBIT_CLIENT_ID, DERIBIT_CLIENT_SECRET)
-            accounts.append(single)
+            quarterly = CryptoTradingAccount(DERIBIT_ACCOUNT_ID,
+                                             Broker.deribit_dma, DERIBIT_ACCOUNT_ID, '',
+                                             MarketDataApi.deribit_md_websocket,
+                                             TradeDataApi.deribit_td_websocket,
+                                             DERIBIT_CLIENT_ID, DERIBIT_CLIENT_SECRET)
+            accounts.append(quarterly)
+            n_quarterly = CryptoTradingAccount(N_DERIBIT_ACCOUNT_ID,
+                                               Broker.deribit_dma, N_DERIBIT_ACCOUNT_ID, '',
+                                               MarketDataApi.deribit_md_websocket,
+                                               TradeDataApi.deribit_td_websocket,
+                                               N_DERIBIT_CLIENT_ID, N_DERIBIT_CLIENT_SECRET)
+            accounts.append(n_quarterly)
             # create websocket for every account
             for account in accounts:
                 asyncio.ensure_future(self.pub_msg(account))

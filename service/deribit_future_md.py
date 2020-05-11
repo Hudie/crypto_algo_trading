@@ -134,7 +134,7 @@ class DeribitMD(ServiceBase):
                     if time.gmtime().tm_min == 5 and hourlyupdated == False:
                         # self.logger.info('Fetching instruments hourly ******')
                         await websocket.send(json.dumps(instruments))
-                        self.logger.info('future md send instruments request')
+                        # self.logger.info('future md send instruments request')
                         hourlyupdated = True
                     elif time.gmtime().tm_min == 31 and hourlyupdated == True:
                         hourlyupdated = False
@@ -194,6 +194,7 @@ class DeribitMD(ServiceBase):
                         pass
                 else:
                     if self.state == ServiceState.started:
+                        self.logger.info('websocket is not open')
                         await self.pub_msg()
         # except websockets.exceptions.ConnectionClosedError:
         #     await self.pub_msg()
