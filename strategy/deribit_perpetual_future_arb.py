@@ -308,10 +308,10 @@ class FutureArbitrage(ServiceBase):
                             current_order = changes['orders'][0]
                         '''
                         if changes['positions']:
-                             future_size = changes['positions'][0]['size']
-                     elif changes['instrument_name'] == 'BTC-PERPETUAL':
-                         if changes['positions']:
-                             perpetual_size = changes['positions'][0]['size']
+                            future_size = changes['positions'][0]['size']
+                    elif changes['instrument_name'] == 'BTC-PERPETUAL':
+                        if changes['positions']:
+                            perpetual_size = changes['positions'][0]['size']
                 else:
                     pass
         except Exception as e:
