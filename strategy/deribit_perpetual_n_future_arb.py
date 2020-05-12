@@ -186,7 +186,7 @@ class FutureArbitrage(ServiceBase):
             global deribit_margin, perpetual, future, can_place_order, if_order_cancelling, if_price_changing
             global current_order, future_size, perpetual_size
 
-            # await asyncio.sleep(1)
+            await asyncio.sleep(1)
             while self.state == ServiceState.started:
                 task = asyncio.ensure_future(self.deribitmd.recv_string())
                 done, pending = await asyncio.wait({task}, timeout=5)
@@ -286,7 +286,9 @@ class FutureArbitrage(ServiceBase):
                 elif msg['type'] in ('cancel', 'cancel_all'):
                     self.logger.info('#### td res: {}: {}'.format(msg['type'], msg['data']))
                     current_order = {}
+                    can_place_order = True
                     if_order_cancelling = False
+                    if_price_changing = False
                 elif msg['type'] == 'user.portfolio':
                     portfolio = msg['data']
                     deribit_margin = [portfolio['equity'], portfolio['initial_margin'], portfolio['maintenance_margin']]
