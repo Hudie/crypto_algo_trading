@@ -338,9 +338,9 @@ class FutureArbitrage(ServiceBase):
                         if changes['orders']:
                             for order in changes['orders']:
                                 if order['order_type'] == 'limit':
-                                    f_limit_order.order = order
-                                    f_limit_order.if_changing = False
-                                    break
+                                    if order['order_state'] == 'open' or order['order_id'] == f_limit_order.order.get('order_id', ''):
+                                        f_limit_order.order = order
+                                        f_limit_order.if_changing = False
                     elif changes['instrument_name'] == 'BTC-PERPETUAL':
                         if changes['trades']:
                             filled = sum([tx['amount'] if tx['order_type'] == 'limit' else 0 for tx in changes['trades']])
@@ -355,9 +355,9 @@ class FutureArbitrage(ServiceBase):
                         if changes['orders']:
                             for order in changes['orders']:
                                 if order['order_type'] == 'limit':
-                                    p_limit_order.order = order
-                                    p_limit_order.if_changing = False
-                                    break
+                                    if order['order_state'] == 'open' or order['order_id'] == p_limit_order.order.get('order_id', ''):
+                                        p_limit_order.order = order
+                                        p_limit_order.if_changing = False
                 elif msg['type'] == 'user.portfolio':
                     portfolio = msg['data']
                     margin = [portfolio['equity'], portfolio['initial_margin'], portfolio['maintenance_margin']]
@@ -378,6 +378,7 @@ class FutureArbitrage(ServiceBase):
                 self.msg.task_done()
         except Exception as e:
             self.logger.exception(e)
+            await self.process_msg()
             
     async def sub_msg_md(self):
         try:
