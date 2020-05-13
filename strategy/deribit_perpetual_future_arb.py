@@ -256,12 +256,17 @@ class FutureArbitrage(ServiceBase):
                         data = msg['data']
                         if data['order']['instrument_name'] == SEASON_FUTURE and data['order']['order_type'] == 'limit':
                             current_order = data['order']
-                        elif data['order']['instrument_name'] == 'BTC-PERPETUAL' and current_order:
-                            self.deribittdreq.send_string(json.dumps({
-                                'accountid': DERIBIT_ACCOUNT_ID, 'method': 'get_order_state',
-                                'params': {'order_id': current_order['order_id']}
-                            }))
-                            self.deribittdreq.recv_string()
+                        elif data['order']['instrument_name'] == 'BTC-PERPETUAL':
+                            if current_order:
+                                self.deribittdreq.send_string(json.dumps({
+                                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'get_order_state',
+                                    'params': {'order_id': current_order['order_id']}
+                                }))
+                                self.deribittdreq.recv_string()
+                            else:
+                                can_place_order = True
+                                if_order_cancelling = False
+                                if_price_changing = False
                         else:
                             pass
                 elif msg['type'] == 'order_state':
@@ -338,19 +343,19 @@ class FutureArbitrage(ServiceBase):
     async def get_current_positions_and_orders(self):
         try:
             while self.state == ServiceState.started:
+                '''
                 self.deribittdreq.send_string(json.dumps({
                     'accountid': DERIBIT_ACCOUNT_ID, 'method': 'get_positions',
                     'params': {'currency': 'BTC', 'kind': 'future'}
                 }))
                 self.deribittdreq.recv_string()
-                await asyncio.sleep(1)
                 '''
                 self.deribittdreq.send_string(json.dumps({
                     'accountid': DERIBIT_ACCOUNT_ID, 'method': 'get_open_orders_by_currency',
                     'params': {'currency': 'BTC', 'kind': 'future'}
                 }))
                 self.deribittdreq.recv_string()
-                '''
+                await asyncio.sleep(1)
         except Exception as e:
             self.logger.exception(e)
             await self.get_current_positions_and_orders()
