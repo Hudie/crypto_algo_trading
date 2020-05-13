@@ -110,7 +110,7 @@ class FutureArbitrage(ServiceBase):
                 else:
                     if p_limit_order.order:
                         if not p_limit_order.order['order_state'] in ('filled', 'cancelled'):
-                            if perpetual.bid > p_limit_order['order']['price'] and not p_limit_order.if_changing:
+                            if perpetual.bid > p_limit_order.order['price'] and not p_limit_order.if_changing:
                                 self.logger.info('**** entry change price to: {}, perpetual limit ****'.format(perpetual.bid + 0.5))
                                 await self.deribittdreq.send_string(json.dumps({
                                     'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
@@ -181,9 +181,122 @@ class FutureArbitrage(ServiceBase):
                                 p_limit_order.if_changing = True
                         else:
                             p_limit_order.reset()
-            # close position when gap disppears
-            elif abs(future.bid - perpetual.bid) < TX_EXIT_GAP:
-                pass
+            # close position when gap disppears in case of shorting future and longing perpetual
+            elif max(future.bid - perpetual.bid, future.ask - perpetual.bid) <= TX_EXIT_GAP and future_size < 0 and perpetual_size > 0:
+                if not f_limit_order.if_placed:
+                    self.logger.info('**** exit gap: {}, future limit ****'.format(future.bid - perpetual.bid))
+                    await self.deribittdreq.send_string(json.dumps({
+                        'accountid': DERIBIT_ACCOUNT_ID, 'method': 'buy',
+                        'params': {'instrument_name': SEASON_FUTURE,
+                                   'amount': min(SIZE_PER_TRADE, perpetual.bidsize, abs(future_size)),
+                                   'type': 'limit',
+                                   'price': future.bid + 0.5,
+                                   'post_only': True, }
+                    }))
+                    await self.deribittdreq.recv_string()
+                    f_limit_order.if_placed = True
+                else:
+                    if f_limit_order.order:
+                        if not f_limit_order.order['order_state'] in ('filled', 'cancelled'):
+                            if future.bid > f_limit_order.order['price'] and not f_limit_order.if_changing:
+                                self.logger.info('**** exit change price to: {}, future limit ****'.format(future.bid + 0.5))
+                                await self.deribittdreq.send_string(json.dumps({
+                                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
+                                    'params': {'instrument_name': SEASON_FUTURE,
+                                               'amount': min(SIZE_PER_TRADE, perpetual.bidsize, abs(future_size)),
+                                               'price': future.bid + 0.5,
+                                               'post_only': True, }
+                                }))
+                                await self.deribittdreq.recv_string()
+                                f_limit_order.if_changing = True
+                        else:
+                            f_limit_order.reset()
+                if not p_limit_order.if_placed:
+                    self.logger.info('**** exit gap: {}, perpetual limit ****'.format(future.bid - perpetual.bid))
+                    await self.deribittdreq.send_string(json.dumps({
+                        'accountid': DERIBIT_ACCOUNT_ID, 'method': 'sell',
+                        'params': {'instrument_name': 'BTC-PERPETUAL',
+                                   'amount': min(SIZE_PER_TRADE, future.asksize, abs(perpetual_size)),
+                                   'type': 'limit',
+                                   'price': perpetual.ask - 0.5,
+                                   'post_only': True, }
+                    }))
+                    await self.deribittdreq.recv_string()
+                    p_limit_order.if_placed = True
+                else:
+                    if p_limit_order.order:
+                        if not p_limit_order.order['order_state'] in ('filled', 'cancelled'):
+                            if perpetual.ask < p_limit_order.order['price'] and not p_limit_order.if_changing:
+                                self.logger.info('**** exit change price to: {}, perpetual limit ****'.format(perpetual.ask - 0.5))
+                                await self.deribittdreq.send_string(json.dumps({
+                                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
+                                    'params': {'instrument_name': 'BTC-PERPETUAL',
+                                               'amount': min(SIZE_PER_TRADE, future.asksize, abs(perpetual_size)),
+                                               'price': perpetual.ask - 0.5,
+                                               'post_only': True, }
+                                }))
+                                await self.deribittdreq.recv_string()
+                                p_limit_order.if_changing = True
+                        else:
+                            p_limit_order.reset()
+            # close position when gap disppears in case of longing future and shorting perpetual
+            elif max(perpetual.bid - future.bid, perpetual.ask - future.bid) <= TX_EXIT_GAP and future_size > 0 and perpetual_size < 0:
+                if not f_limit_order.if_placed:
+                    self.logger.info('**** exit gap: {}, future limit ****'.format(perpetual.bid - future.bid))
+                    await self.deribittdreq.send_string(json.dumps({
+                        'accountid': DERIBIT_ACCOUNT_ID, 'method': 'sell',
+                        'params': {'instrument_name': SEASON_FUTURE,
+                                   'amount': min(SIZE_PER_TRADE, perpetual.asksize, abs(future_size)),
+                                   'type': 'limit',
+                                   'price': future.ask - 0.5,
+                                   'post_only': True, }
+                    }))
+                    await self.deribittdreq.recv_string()
+                    f_limit_order.if_placed = True
+                else:
+                    if f_limit_order.order:
+                        if not f_limit_order.order['order_state'] in ('filled', 'cancelled'):
+                            if future.ask < f_limit_order.order['price'] and not f_limit_order.if_changing:
+                                self.logger.info('**** exit change price to: {}, future limit ****'.format(future.ask - 0.5))
+                                await self.deribittdreq.send_string(json.dumps({
+                                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
+                                    'params': {'instrument_name': SEASON_FUTURE,
+                                               'amount': min(SIZE_PER_TRADE, perpetual.asksize, abs(future_size)),
+                                               'price': future.ask - 0.5,
+                                               'post_only': True, }
+                                }))
+                                await self.deribittdreq.recv_string()
+                                f_limit_order.if_changing = True
+                        else:
+                            f_limit_order.reset()
+                if not p_limit_order.if_placed:
+                    self.logger.info('**** exit gap: {}, perpetual limit ****'.format(perpetual.bid - future.bid))
+                    await self.deribittdreq.send_string(json.dumps({
+                        'accountid': DERIBIT_ACCOUNT_ID, 'method': 'buy',
+                        'params': {'instrument_name': 'BTC-PERPETUAL',
+                                   'amount': min(SIZE_PER_TRADE, future.asksize, abs(perpetual_size)),
+                                   'type': 'limit',
+                                   'price': perpetual.bid + 0.5,
+                                   'post_only': True, }
+                    }))
+                    await self.deribittdreq.recv_string()
+                    p_limit_order.if_placed = True
+                else:
+                    if p_limit_order.order:
+                        if not p_limit_order.order['order_state'] in ('filled', 'cancelled'):
+                            if perpetual.bid > p_limit_order.order['price'] and not p_limit_order.if_changing:
+                                self.logger.info('**** exit change price to: {}, perpetual limit ****'.format(perpetual.bid + 0.5))
+                                await self.deribittdreq.send_string(json.dumps({
+                                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
+                                    'params': {'instrument_name': 'BTC-PERPETUAL',
+                                               'amount': min(SIZE_PER_TRADE, future.bidsize, abs(perpetual_size)),
+                                               'price': perpetual.bid + 0.5,
+                                               'post_only': True, }
+                                }))
+                                await self.deribittdreq.recv_string()
+                                p_limit_order.if_changing = True
+                        else:
+                            p_limit_order.reset()
             else:
                 if f_limit_order.if_placed or p_limit_order.if_placed:
                     if not f_limit_order.if_cancelling or not p_limit_order.if_cancelling:
@@ -210,6 +323,7 @@ class FutureArbitrage(ServiceBase):
                     await self.find_quotes_gap()
                 elif msg['type'] == 'user.changes.future':
                     changes = msg['data']
+                    self.logger.info('---- td res: {}, {}'.format(msg['type'], msg['data']))
                     if changes['instrument_name'] == SEASON_FUTURE:
                         if changes['trades']:
                             filled = sum([tx['amount'] if tx['order_type'] == 'limit' else 0 for tx in changes['trades']])
@@ -223,7 +337,7 @@ class FutureArbitrage(ServiceBase):
                             future_size = changes['positions'][0]['size']
                         if changes['orders']:
                             for order in changes['orders']:
-                                if order['order_type'] == 'limit' and order != f_limit_order.order:
+                                if order['order_type'] == 'limit':
                                     f_limit_order.order = order
                                     f_limit_order.if_changing = False
                                     break
@@ -240,7 +354,7 @@ class FutureArbitrage(ServiceBase):
                             perpetual_size = changes['positions'][0]['size']
                         if changes['orders']:
                             for order in changes['orders']:
-                                if order['order_type'] == 'limit' and order != p_limit_order.order:
+                                if order['order_type'] == 'limit':
                                     p_limit_order.order = order
                                     p_limit_order.if_changing = False
                                     break
@@ -248,30 +362,19 @@ class FutureArbitrage(ServiceBase):
                     portfolio = msg['data']
                     margin = [portfolio['equity'], portfolio['initial_margin'], portfolio['maintenance_margin']]
                 elif msg['type'] == 'cancel_all':
+                    self.logger.info('---- td res: {}, {}'.format(msg['type'], msg['data']))
                     f_limit_order.reset()
                     p_limit_order.reset()
-                    self.logger.info('---- td res: cancel_all')
+                elif msg['type'] == 'positions':
+                    for d in msg['data']:
+                        if d['instrument_name'] == SEASON_FUTURE:
+                            future_size = d['size']
+                        elif d['instrument_name'] == 'BTC-PERPETUAL':
+                            perpetual_size = d['size']
                 elif msg['type'] in ('buy', 'sell', 'edit'):
-                    self.logger.info('---- td res: {}, {}'.format(msg['type'], msg['data']))
-                    if msg['data']:
-                        order = msg['data']['order']
-                        if order['order_type'] == 'limit':
-                            if order['instrument_name'] == SEASON_FUTURE:
-                                f_limit_order.order = order
-                                if msg['type'] == 'edit':
-                                    f_limit_order.if_changing = False
-                            elif order['instrument_name'] == 'BTC-PERPETUAL':
-                                p_limit_order.order = order
-                                if msg['type'] == 'edit':
-                                    p_limit_order.if_changing = False
-                        elif order['order_type'] == 'market':
-                            order_id = f_limit_order.order.get('order_id', '') if order['instrument_name'] == 'BTC-PERPETUAL' else p_limit_order.order.get('order_id', '')
-                            if order_id:
-                                await self.deribittdreq.send_string(json.dumps({
-                                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'get_order_state',
-                                    'params': {'order_id': order_id}
-                                }))
-                                await self.deribittdreq.recv_string()
+                    # self.logger.info('---- td res: {}, {}'.format(msg['type'], msg['data']))
+                    pass
+
                 self.msg.task_done()
         except Exception as e:
             self.logger.exception(e)
@@ -308,6 +411,19 @@ class FutureArbitrage(ServiceBase):
             self.logger.exception(e)
             await self.sub_msg_td()
 
+    async def get_current_positions(self):
+        try:
+            while self.state == ServiceState.started:
+                await self.deribittdreq.send_string(json.dumps({
+                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'get_positions',
+                    'params': {'currency': 'BTC', 'kind': 'future'}
+                }))
+                await self.deribittdreq.recv_string()
+                await asyncio.sleep(1)
+        except Exception as e:
+            self.logger.exception(e)
+            await self.get_current_positions()
+
     async def run(self):
         if self.state == ServiceState.started:
             self.logger.error('tried to run service, but state is %s' % self.state)
@@ -316,6 +432,7 @@ class FutureArbitrage(ServiceBase):
             asyncio.ensure_future(self.process_msg())
             asyncio.ensure_future(self.sub_msg_md())
             asyncio.ensure_future(self.sub_msg_td())
+            asyncio.ensure_future(self.get_current_positions())
 
             
             
