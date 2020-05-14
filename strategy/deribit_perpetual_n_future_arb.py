@@ -65,7 +65,7 @@ class FutureArbitrage(ServiceBase):
         try:
             global future, future_size, f_limit_order, perpetual, perpetual_size, p_limit_order, margin
             pos_idx = sum([1 if max(abs(future_size), abs(perpetual_size)) >= i else 0 for i in N_POSITION_SIZE_THRESHOLD])
-            # self.logger.info('@@@@ find_quotes_gap: {}, {}'.format(f_limit_order.if_placed, p_limit_order.if_placed))
+            
             # future > perpetual situation
             if min(future.bid - perpetual.bid, future.ask - perpetual.ask) >= N_TX_ENTRY_GAP[pos_idx]:
                 if not f_limit_order.if_placed:
@@ -87,7 +87,7 @@ class FutureArbitrage(ServiceBase):
                                 self.logger.info('**** entry change price to: {}, future limit ****'.format(future.ask - 0.5))
                                 await self.deribittdreq.send_string(json.dumps({
                                     'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'edit',
-                                    'params': {'instrument_name': N_QUARTERLY_FUTURE,
+                                    'params': {'order_id': f_limit_order.order['order_id'],
                                                'amount': min(N_SIZE_PER_TRADE, perpetual.asksize),
                                                'price': future.ask - 0.5,
                                                'post_only': True, }
@@ -115,7 +115,7 @@ class FutureArbitrage(ServiceBase):
                                 self.logger.info('**** entry change price to: {}, perpetual limit ****'.format(perpetual.bid + 0.5))
                                 await self.deribittdreq.send_string(json.dumps({
                                     'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'edit',
-                                    'params': {'instrument_name': 'BTC-PERPETUAL',
+                                    'params': {'order_id': p_limit_order.order['order_id'],
                                                'amount': min(N_SIZE_PER_TRADE, future.bidsize),
                                                'price': perpetual.bid + 0.5,
                                                'post_only': True, }
@@ -145,7 +145,7 @@ class FutureArbitrage(ServiceBase):
                                 self.logger.info('**** reverse entry change price to: {}, future limit ****'.format(future.bid + 0.5))
                                 await self.deribittdreq.send_string(json.dumps({
                                     'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'edit',
-                                    'params': {'instrument_name': N_QUARTERLY_FUTURE,
+                                    'params': {'order_id': f_limit_order.order['order_id'],
                                                'amount': min(N_SIZE_PER_TRADE, perpetual.bidsize),
                                                'price': future.bid + 0.5,
                                                'post_only': True, }
@@ -173,7 +173,7 @@ class FutureArbitrage(ServiceBase):
                                 self.logger.info('**** reverse entry change price to: {}, perpetual limit ****'.format(perpetual.ask - 0.5))
                                 await self.deribittdreq.send_string(json.dumps({
                                     'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'edit',
-                                    'params': {'instrument_name': 'BTC-PERPETUAL',
+                                    'params': {'order_id': p_limit_order.order['order_id'],
                                                'amount': min(N_SIZE_PER_TRADE, future.asksize),
                                                'price': perpetual.ask - 0.5,
                                                'post_only': True, }
@@ -203,7 +203,7 @@ class FutureArbitrage(ServiceBase):
                                 self.logger.info('**** exit change price to: {}, future limit ****'.format(future.bid + 0.5))
                                 await self.deribittdreq.send_string(json.dumps({
                                     'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'edit',
-                                    'params': {'instrument_name': N_QUARTERLY_FUTURE,
+                                    'params': {'order_id': f_limit_order.order['order_id'],
                                                'amount': min(N_SIZE_PER_TRADE, perpetual.bidsize, abs(future_size)),
                                                'price': future.bid + 0.5,
                                                'post_only': True, }
@@ -231,7 +231,7 @@ class FutureArbitrage(ServiceBase):
                                 self.logger.info('**** exit change price to: {}, perpetual limit ****'.format(perpetual.ask - 0.5))
                                 await self.deribittdreq.send_string(json.dumps({
                                     'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'edit',
-                                    'params': {'instrument_name': 'BTC-PERPETUAL',
+                                    'params': {'order_id': p_limit_order.order['order_id'],
                                                'amount': min(N_SIZE_PER_TRADE, future.asksize, abs(perpetual_size)),
                                                'price': perpetual.ask - 0.5,
                                                'post_only': True, }
@@ -261,7 +261,7 @@ class FutureArbitrage(ServiceBase):
                                 self.logger.info('**** exit change price to: {}, future limit ****'.format(future.ask - 0.5))
                                 await self.deribittdreq.send_string(json.dumps({
                                     'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'edit',
-                                    'params': {'instrument_name': N_QUARTERLY_FUTURE,
+                                    'params': {'order_id': f_limit_order.order['order_id'],
                                                'amount': min(N_SIZE_PER_TRADE, perpetual.asksize, abs(future_size)),
                                                'price': future.ask - 0.5,
                                                'post_only': True, }
@@ -289,7 +289,7 @@ class FutureArbitrage(ServiceBase):
                                 self.logger.info('**** exit change price to: {}, perpetual limit ****'.format(perpetual.bid + 0.5))
                                 await self.deribittdreq.send_string(json.dumps({
                                     'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'edit',
-                                    'params': {'instrument_name': 'BTC-PERPETUAL',
+                                    'params': {'order_id': p_limit_order.order['order_id'],
                                                'amount': min(N_SIZE_PER_TRADE, future.bidsize, abs(perpetual_size)),
                                                'price': perpetual.bid + 0.5,
                                                'post_only': True, }
@@ -308,7 +308,7 @@ class FutureArbitrage(ServiceBase):
                         await self.deribittdreq.recv_string()
                         f_limit_order.if_cancelling = True
                         p_limit_order.if_cancelling = True
-        except AttributeError as e:
+        except AttributeError:
             pass
         except Exception as e:
             self.logger.exception(e)
@@ -333,12 +333,13 @@ class FutureArbitrage(ServiceBase):
                     if changes['instrument_name'] == N_QUARTERLY_FUTURE:
                         if changes['trades']:
                             filled = sum([tx['amount'] if tx['order_type'] == 'limit' else 0 for tx in changes['trades']])
-                            await self.deribittdreq.send_string(json.dumps({
-                                'accountid': N_DERIBIT_ACCOUNT_ID,
-                                'method': 'buy' if changes['trades'][0]['direction'] == 'sell' else 'sell',
-                                'params': {'instrument_name': 'BTC-PERPETUAL', 'amount': filled, 'type': 'market',}
-                            }))
-                            await self.deribittdreq.recv_string()
+                            if filled > 0:
+                                await self.deribittdreq.send_string(json.dumps({
+                                    'accountid': N_DERIBIT_ACCOUNT_ID,
+                                    'method': 'buy' if changes['trades'][0]['direction'] == 'sell' else 'sell',
+                                    'params': {'instrument_name': 'BTC-PERPETUAL', 'amount': filled, 'type': 'market',}
+                                }))
+                                await self.deribittdreq.recv_string()
                         if changes['positions']:
                             future_size = changes['positions'][0]['size']
                         if changes['orders']:
@@ -350,12 +351,13 @@ class FutureArbitrage(ServiceBase):
                     elif changes['instrument_name'] == 'BTC-PERPETUAL':
                         if changes['trades']:
                             filled = sum([tx['amount'] if tx['order_type'] == 'limit' else 0 for tx in changes['trades']])
-                            await self.deribittdreq.send_string(json.dumps({
-                                'accountid': N_DERIBIT_ACCOUNT_ID,
-                                'method': 'buy' if changes['trades'][0]['direction'] == 'sell' else 'sell',
-                                'params': {'instrument_name': N_QUARTERLY_FUTURE, 'amount': filled, 'type': 'market',}
-                            }))
-                            await self.deribittdreq.recv_string()
+                            if filled > 0:
+                                await self.deribittdreq.send_string(json.dumps({
+                                    'accountid': N_DERIBIT_ACCOUNT_ID,
+                                    'method': 'buy' if changes['trades'][0]['direction'] == 'sell' else 'sell',
+                                    'params': {'instrument_name': N_QUARTERLY_FUTURE, 'amount': filled, 'type': 'market',}
+                                }))
+                                await self.deribittdreq.recv_string()
                         if changes['positions']:
                             perpetual_size = changes['positions'][0]['size']
                         if changes['orders']:
@@ -378,7 +380,7 @@ class FutureArbitrage(ServiceBase):
                             perpetual_size = d['size']
                 elif msg['type'] in ('buy', 'sell', 'edit'):
                     pass
-
+                    
                 self.msg.task_done()
         except Exception as e:
             self.logger.exception(e)

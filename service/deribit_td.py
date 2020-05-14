@@ -157,6 +157,8 @@ class DeribitTD(ServiceBase):
                                 await websocket.send(json.dumps(test))
                                 lastheartbeat = time.time()
                         elif str(response.get('id', '')) in MSG_MAP.keys():
+                            if 'error' in response:
+                                self.logger.info(response)
                             await self.pubserver.send_string(json.dumps({
                                 'accountid': account.id,
                                 'type': MSG_MAP[str(response.get('id'))],
