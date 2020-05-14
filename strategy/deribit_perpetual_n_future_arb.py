@@ -301,6 +301,7 @@ class FutureArbitrage(ServiceBase):
             else:
                 if f_limit_order.if_placed or p_limit_order.if_placed:
                     if not f_limit_order.if_cancelling or not p_limit_order.if_cancelling:
+                        self.logger.info('**** gap disppear, cancel_all ****')
                         await self.deribittdreq.send_string(json.dumps({
                             'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'cancel_all', 'params': {}
                         }))
@@ -315,6 +316,9 @@ class FutureArbitrage(ServiceBase):
             global future, future_size, perpetual, perpetual_size, margin, f_limit_order, p_limit_order
             while self.state == ServiceState.started:
                 msg = await self.msg.get()
+                if msg['type'] not in ('quote', 'user.portfolio'):
+                    self.logger.info('---- td res: {}, {}'.format(msg['type'], msg['data']))
+                    
                 if msg['type'] == 'quote':
                     d = pickle.loads(eval(msg['data']))
                     if d['sym'] == 'BTC-PERPETUAL':
@@ -324,7 +328,6 @@ class FutureArbitrage(ServiceBase):
                     await self.find_quotes_gap()
                 elif msg['type'] == 'user.changes.future':
                     changes = msg['data']
-                    self.logger.info('---- td res: {}, {}'.format(msg['type'], msg['data']))
                     if changes['instrument_name'] == N_QUARTERLY_FUTURE:
                         if changes['trades']:
                             filled = sum([tx['amount'] if tx['order_type'] == 'limit' else 0 for tx in changes['trades']])
@@ -338,7 +341,7 @@ class FutureArbitrage(ServiceBase):
                             future_size = changes['positions'][0]['size']
                         if changes['orders']:
                             for order in changes['orders']:
-                                if order['order_type'] == 'limit':
+                                if order['order_type'] == 'limit' and f_limit_order.if_placed == True:
                                     if order['order_state'] == 'open' or order['order_id'] == f_limit_order.order.get('order_id', ''):
                                         f_limit_order.order = order
                                         f_limit_order.if_changing = False
@@ -355,7 +358,7 @@ class FutureArbitrage(ServiceBase):
                             perpetual_size = changes['positions'][0]['size']
                         if changes['orders']:
                             for order in changes['orders']:
-                                if order['order_type'] == 'limit':
+                                if order['order_type'] == 'limit' and p_limit_order.if_placed == True:
                                     if order['order_state'] == 'open' or order['order_id'] == p_limit_order.order.get('order_id', ''):
                                         p_limit_order.order = order
                                         p_limit_order.if_changing = False
@@ -363,7 +366,6 @@ class FutureArbitrage(ServiceBase):
                     portfolio = msg['data']
                     margin = [portfolio['equity'], portfolio['initial_margin'], portfolio['maintenance_margin']]
                 elif msg['type'] == 'cancel_all':
-                    self.logger.info('---- td res: {}, {}'.format(msg['type'], msg['data']))
                     f_limit_order.reset()
                     p_limit_order.reset()
                 elif msg['type'] == 'positions':
@@ -373,7 +375,6 @@ class FutureArbitrage(ServiceBase):
                         elif d['instrument_name'] == 'BTC-PERPETUAL':
                             perpetual_size = d['size']
                 elif msg['type'] in ('buy', 'sell', 'edit'):
-                    # self.logger.info('---- td res: {}, {}'.format(msg['type'], msg['data']))
                     pass
 
                 self.msg.task_done()
