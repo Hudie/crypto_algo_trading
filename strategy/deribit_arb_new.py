@@ -318,7 +318,7 @@ class FutureArbitrage(ServiceBase):
             global future, future_size, perpetual, perpetual_size, margin, f_limit_order, p_limit_order
             while self.state == ServiceState.started:
                 msg = await self.msg.get()
-                if msg['type'] not in ('quote', 'user.portfolio'):
+                if msg['type'] not in ('quote', 'user.portfolio', 'buy', 'sell', 'edit'):
                     self.logger.info('---- td res: {}, {}'.format(msg['type'], msg['data']))
                     
                 if msg['type'] == 'quote':

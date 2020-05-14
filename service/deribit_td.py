@@ -9,7 +9,6 @@ import websockets
 import json
 import time
 import queue
-import pickle
 from crypto_trading.config import *
 
 
@@ -152,13 +151,13 @@ class DeribitTD(ServiceBase):
                     response = json.loads(done.pop().result()) if done else {}
 
                     if response:
+                        if 'error' in response:
+                            self.logger.error(response)
                         if response.get('method', '') == 'heartbeat':
                             if response['params']['type'] == 'test_request':
                                 await websocket.send(json.dumps(test))
                                 lastheartbeat = time.time()
                         elif str(response.get('id', '')) in MSG_MAP.keys():
-                            if 'error' in response:
-                                self.logger.info(response)
                             await self.pubserver.send_string(json.dumps({
                                 'accountid': account.id,
                                 'type': MSG_MAP[str(response.get('id'))],
