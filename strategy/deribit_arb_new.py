@@ -64,7 +64,7 @@ class FutureArbitrage(ServiceBase):
     async def find_quotes_gap(self):
         try:
             global future, future_size, f_limit_order, perpetual, perpetual_size, p_limit_order, margin
-            pos_idx = sum([1 if max(abs(future_size), abs(perpetual_size)) >= i else 0 for i in POSITIOSIZE_THRESHOLD])
+            pos_idx = sum([1 if max(abs(future_size), abs(perpetual_size)) >= i else 0 for i in POSITION_SIZE_THRESHOLD])
             
             # future > perpetual situation
             if min(future.bid - perpetual.bid, future.ask - perpetual.ask) >= TX_ENTRY_GAP[pos_idx]:
@@ -424,19 +424,6 @@ class FutureArbitrage(ServiceBase):
             self.logger.exception(e)
             await self.sub_msg_td()
 
-    async def get_current_positions(self):
-        try:
-            while self.state == ServiceState.started:
-                await self.deribittdreq.send_string(json.dumps({
-                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'get_positions',
-                    'params': {'currency': 'BTC', 'kind': 'future'}
-                }))
-                await self.deribittdreq.recv_string()
-                await asyncio.sleep(1)
-        except Exception as e:
-            self.logger.exception(e)
-            await self.get_current_positions()
-
     async def run(self):
         if self.state == ServiceState.started:
             self.logger.error('tried to run service, but state is %s' % self.state)
@@ -445,10 +432,9 @@ class FutureArbitrage(ServiceBase):
             asyncio.ensure_future(self.process_msg())
             asyncio.ensure_future(self.sub_msg_md())
             asyncio.ensure_future(self.sub_msg_td())
-            # asyncio.ensure_future(self.get_current_positions())
 
             
             
 if __name__ == '__main__':
-    service = FutureArbitrage('n-future-arb')
+    service = FutureArbitrage('arb-new')
     start_service(service, {})
