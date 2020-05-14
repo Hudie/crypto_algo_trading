@@ -308,6 +308,8 @@ class FutureArbitrage(ServiceBase):
                         await self.deribittdreq.recv_string()
                         f_limit_order.if_cancelling = True
                         p_limit_order.if_cancelling = True
+        except AttributeError as e:
+            pass
         except Exception as e:
             self.logger.exception(e)
 
@@ -384,6 +386,7 @@ class FutureArbitrage(ServiceBase):
             
     async def sub_msg_md(self):
         try:
+            await asyncio.sleep(1)
             while self.state == ServiceState.started:
                 task = asyncio.ensure_future(self.deribitmd.recv_string())
                 done, pending = await asyncio.wait({task}, timeout=5)
