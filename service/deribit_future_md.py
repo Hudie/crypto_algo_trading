@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
 
-from crypto_foundation.api.deribit_parser import parse_deribit_trade, parse_deribit_quote, parse_deribit_order_book, parse_deribit_instrument
 from base import ServiceState, ServiceBase, start_service
 import zmq.asyncio
 import websockets
 import json
-import pickle
 import time
 import asyncio
 from crypto_trading.config import *
@@ -116,7 +114,7 @@ class DeribitMD(ServiceBase):
                 response = json.loads(await websocket.recv())
                 for i in response['result']:
                     self.pubserver.send_string(json.dumps({'type': 'instrument',
-                                                           'data': str(pickle.dumps(parse_deribit_instrument(i)))}))
+                                                           'data': i}))
                     for j in ('trades', 'ticker', 'book'):
                         activechannels.add('.'.join([j, i['instrument_name'], 'raw']))
                 subscribe['params']['channels'] = list(activechannels)
@@ -167,22 +165,22 @@ class DeribitMD(ServiceBase):
                             for i in response['result']:
                                 if i['instrument_name'] in newinstruments:
                                     self.pubserver.send_string(json.dumps({'type': 'instrument',
-                                                                           'data': str(pickle.dumps(parse_deribit_instrument(i)))}))
+                                                                           'data': i}))
                             activechannels = newchannels
                     elif response.get('params', ''):
                         # self.logger.info(str(response['params']['data']))
                         if response['params']['channel'].startswith('trades'):
                             for i in response['params']['data']:
                                 self.pubserver.send_string(json.dumps({'type': 'trade',
-                                                                       'data': str(pickle.dumps(parse_deribit_trade(i)))}))
+                                                                       'data': i}))
                         elif response['params']['channel'].startswith('ticker'):
                             self.pubserver.send_string(
                                 json.dumps({'type': 'quote',
-                                            'data': str(pickle.dumps(parse_deribit_quote(response['params']['data'])))}))
+                                            'data': response['params']['data']}))
                         elif response['params']['channel'].startswith('book'):
                             self.pubserver.send_string(
                                 json.dumps({'type': 'book',
-                                            'data': str(pickle.dumps(parse_deribit_order_book(response['params']['data'])))}))
+                                            'data': response['params']['data']}))
                         else:
                             pass
                     else:

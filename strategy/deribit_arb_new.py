@@ -5,7 +5,6 @@ from crypto_trading.config import *
 import zmq.asyncio
 import asyncio
 import json
-import pickle
 
 
 
@@ -34,11 +33,12 @@ p_limit_order = OrderState()
 
 
 class Quote():
-    def __init__(self, bid, bidsize, ask, asksize):
+    def __init__(self, bid, bidsize, ask, asksize, index_price):
         self.bid = bid
         self.bidsize = bidsize
         self.ask = ask
         self.asksize = asksize
+        self.index_price = index_price
 
 
 class FutureArbitrage(ServiceBase):
@@ -100,7 +100,7 @@ class FutureArbitrage(ServiceBase):
                     self.logger.info('**** entry gap: {}, perpetual limit ****'.format(future.bid - perpetual.bid))
                     await self.deribittdreq.send_string(json.dumps({
                         'accountid': DERIBIT_ACCOUNT_ID, 'method': 'buy',
-                        'params': {'instrument_name': 'BTC-PERPETUAL',
+                        'params': {'instrument_name': PERPETUAL,
                                    'amount': min(SIZE_PER_TRADE, future.bidsize),
                                    'type': 'limit',
                                    'price': perpetual.bid + 0.5,
@@ -158,7 +158,7 @@ class FutureArbitrage(ServiceBase):
                     self.logger.info('**** reverse entry gap: {}, perpetual limit ****'.format(perpetual.bid - future.bid))
                     await self.deribittdreq.send_string(json.dumps({
                         'accountid': DERIBIT_ACCOUNT_ID, 'method': 'sell',
-                        'params': {'instrument_name': 'BTC-PERPETUAL',
+                        'params': {'instrument_name': PERPETUAL,
                                    'amount': min(SIZE_PER_TRADE, future.asksize),
                                    'type': 'limit',
                                    'price': perpetual.ask - 0.5,
@@ -216,7 +216,7 @@ class FutureArbitrage(ServiceBase):
                     self.logger.info('**** exit gap: {}, perpetual limit ****'.format(future.bid - perpetual.bid))
                     await self.deribittdreq.send_string(json.dumps({
                         'accountid': DERIBIT_ACCOUNT_ID, 'method': 'sell',
-                        'params': {'instrument_name': 'BTC-PERPETUAL',
+                        'params': {'instrument_name': PERPETUAL,
                                    'amount': min(SIZE_PER_TRADE, future.asksize, abs(perpetual_size)),
                                    'type': 'limit',
                                    'price': perpetual.ask - 0.5,
@@ -274,7 +274,7 @@ class FutureArbitrage(ServiceBase):
                     self.logger.info('**** exit gap: {}, perpetual limit ****'.format(perpetual.bid - future.bid))
                     await self.deribittdreq.send_string(json.dumps({
                         'accountid': DERIBIT_ACCOUNT_ID, 'method': 'buy',
-                        'params': {'instrument_name': 'BTC-PERPETUAL',
+                        'params': {'instrument_name': PERPETUAL,
                                    'amount': min(SIZE_PER_TRADE, future.asksize, abs(perpetual_size)),
                                    'type': 'limit',
                                    'price': perpetual.bid + 0.5,
@@ -322,11 +322,11 @@ class FutureArbitrage(ServiceBase):
                     self.logger.info('---- td res: {}, {}'.format(msg['type'], msg['data']))
                     
                 if msg['type'] == 'quote':
-                    d = pickle.loads(eval(msg['data']))
-                    if d['sym'] == 'BTC-PERPETUAL':
-                        perpetual = Quote(d['bid_prices'][0], d['bid_sizes'][0], d['ask_prices'][0], d['ask_sizes'][0])
-                    elif d['sym'] == SEASON_FUTURE:
-                        future = Quote(d['bid_prices'][0], d['bid_sizes'][0], d['ask_prices'][0], d['ask_sizes'][0])
+                    d = msg['data']
+                    if d['instrument_name'] == PERPETUAL:
+                        perpetual = Quote(d['best_bid_price'], d['best_bid_amount'], d['best_ask_price'], d['best_ask_amount'], d['index_price'])
+                    elif d['instrument_name'] == SEASON_FUTURE:
+                        future = Quote(d['best_bid_price'], d['best_bid_amount'], d['best_ask_price'], d['best_ask_amount'], d['index_price'])
                     await self.find_quotes_gap()
                 elif msg['type'] == 'user.changes.future':
                     changes = msg['data']
@@ -337,7 +337,7 @@ class FutureArbitrage(ServiceBase):
                                 await self.deribittdreq.send_string(json.dumps({
                                     'accountid': DERIBIT_ACCOUNT_ID,
                                     'method': 'buy' if changes['trades'][0]['direction'] == 'sell' else 'sell',
-                                    'params': {'instrument_name': 'BTC-PERPETUAL', 'amount': filled, 'type': 'market',}
+                                    'params': {'instrument_name': PERPETUAL, 'amount': filled, 'type': 'market',}
                                 }))
                                 await self.deribittdreq.recv_string()
                         if changes['positions']:
@@ -348,7 +348,7 @@ class FutureArbitrage(ServiceBase):
                                     if order['order_state'] == 'open' or order['order_id'] == f_limit_order.order.get('order_id', ''):
                                         f_limit_order.order = order
                                         f_limit_order.if_changing = False
-                    elif changes['instrument_name'] == 'BTC-PERPETUAL':
+                    elif changes['instrument_name'] == PERPETUAL:
                         if changes['trades']:
                             filled = sum([tx['amount'] if tx['order_type'] == 'limit' else 0 for tx in changes['trades']])
                             if filled > 0:
@@ -376,7 +376,7 @@ class FutureArbitrage(ServiceBase):
                     for d in msg['data']:
                         if d['instrument_name'] == SEASON_FUTURE:
                             future_size = d['size']
-                        elif d['instrument_name'] == 'BTC-PERPETUAL':
+                        elif d['instrument_name'] == PERPETUAL:
                             perpetual_size = d['size']
                 elif msg['type'] in ('buy', 'sell', 'edit'):
                     pass
@@ -413,7 +413,7 @@ class FutureArbitrage(ServiceBase):
         try:
             await self.deribittdreq.send_string(json.dumps({
                 'accountid': DERIBIT_ACCOUNT_ID, 'method': 'get_positions',
-                'params': {'currency': 'BTC', 'kind': 'future'}
+                'params': {'currency': SYMBOL, 'kind': 'future'}
             }))
             await self.deribittdreq.recv_string()
             while self.state == ServiceState.started:

@@ -69,15 +69,15 @@ MSG_CANCEL_ALL_ID	= 8748
 MSG_GET_ORDER_STATE_ID	= 4316
 MSG_GET_OPEN_ORDERS_BY_CURRENCY_ID	= 1953
 
-MSG_MAP = {str(MSG_GET_POSITIONS_ID): 'positions',
-           str(MSG_GET_POSITION_ID): 'position',
-           str(MSG_BUY_ID): 'buy',
-           str(MSG_SELL_ID): 'sell',
-           str(MSG_EDIT_ID): 'edit',
-           str(MSG_CANCEL_ID): 'cancel',
-           str(MSG_CANCEL_ALL_ID): 'cancel_all',
-           str(MSG_GET_ORDER_STATE_ID): 'order_state',
-           str(MSG_GET_OPEN_ORDERS_BY_CURRENCY_ID): 'open_orders',
+MSG_MAP = {MSG_GET_POSITIONS_ID: 'positions',
+           MSG_GET_POSITION_ID: 'position',
+           MSG_BUY_ID: 'buy',
+           MSG_SELL_ID: 'sell',
+           MSG_EDIT_ID: 'edit',
+           MSG_CANCEL_ID: 'cancel',
+           MSG_CANCEL_ALL_ID: 'cancel_all',
+           MSG_GET_ORDER_STATE_ID: 'order_state',
+           MSG_GET_OPEN_ORDERS_BY_CURRENCY_ID: 'open_orders',
 }
 
 def get_random_id():
@@ -157,10 +157,10 @@ class DeribitTD(ServiceBase):
                             if response['params']['type'] == 'test_request':
                                 await websocket.send(json.dumps(test))
                                 lastheartbeat = time.time()
-                        elif str(response.get('id', '')) in MSG_MAP.keys():
+                        elif response.get('id', '') in MSG_MAP.keys():
                             await self.pubserver.send_string(json.dumps({
                                 'accountid': account.id,
-                                'type': MSG_MAP[str(response.get('id'))],
+                                'type': MSG_MAP[response.get('id')],
                                 'data': response.get('result', {})}))
                         elif response.get('params', ''):
                             if response['params']['channel'].startswith('user.portfolio'):
