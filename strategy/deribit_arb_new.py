@@ -25,16 +25,18 @@ expiration = time.mktime(time.strptime(get_expiration(SEASON_FUTURE), '%d%m%y'))
 
 
 class OrderState():
-    def __init__(self, if_placed=False, if_changing=False, if_cancelling=False,  order={}):
+    def __init__(self, if_placed=False, if_changing=False, if_cancelling=False, label='', order={}):
         self.if_placed = if_placed
         self.if_changing = if_changing
         self.if_cancelling = if_cancelling
+        self.label = label
         self.order = order
 
     def reset(self):
         self.if_placed = False
         self.if_changing = False
         self.if_cancelling = False
+        self.label = ''
         self.order = {}
 
 f_limit_order = OrderState()
@@ -74,6 +76,8 @@ class FutureArbitrage(ServiceBase):
         try:
             global future, future_size, f_limit_order, perpetual, perpetual_size, p_limit_order, margin
             pos_idx = sum([1 if max(abs(future_size), abs(perpetual_size)) >= i else 0 for i in POSITION_SIZE_THRESHOLD])
+            if pos_idx == len(POSITION_SIZE_THRESHOLD):
+                return False
             min_left = (expiration - time.time())/60
             if (future.bid + future.ask)/2 >= future.index_price:
                 premium = ((future.bid + future.ask)/2 - max(future.index_price, (perpetual.bid + perpetual.ask)/2))/future.index_price * (525600/min_left) * 100
@@ -95,7 +99,7 @@ class FutureArbitrage(ServiceBase):
                                    'price': future.ask - MINIMUM_TICK_SIZE,
                                    'post_only': True, }
                     }))
-                    await self.deribittdreq.recv_string()
+                    f_limit_order.label = json.loads(await self.deribittdreq.recv_string())['internalid']
                     f_limit_order.if_placed = True
                 else:
                     if f_limit_order.order:
@@ -123,7 +127,7 @@ class FutureArbitrage(ServiceBase):
                                    'price': perpetual.bid + MINIMUM_TICK_SIZE,
                                    'post_only': True, }
                     }))
-                    await self.deribittdreq.recv_string()
+                    p_limit_order.label = json.loads(await self.deribittdreq.recv_string())['internalid']
                     p_limit_order.if_placed = True
                 else:
                     if p_limit_order.order:
@@ -156,7 +160,7 @@ class FutureArbitrage(ServiceBase):
                                    'price': future.bid + MINIMUM_TICK_SIZE,
                                    'post_only': True, }
                     }))
-                    await self.deribittdreq.recv_string()
+                    f_limit_order.label = json.loads(await self.deribittdreq.recv_string())['internalid']
                     f_limit_order.if_placed = True
                 else:
                     if f_limit_order.order:
@@ -184,7 +188,7 @@ class FutureArbitrage(ServiceBase):
                                    'price': perpetual.ask - MINIMUM_TICK_SIZE,
                                    'post_only': True, }
                     }))
-                    await self.deribittdreq.recv_string()
+                    p_limit_order.label = json.loads(await self.deribittdreq.recv_string())['internalid']
                     p_limit_order.if_placed = True
                 else:
                     if p_limit_order.order:
@@ -248,10 +252,10 @@ class FutureArbitrage(ServiceBase):
                             future_size = changes['positions'][0]['size']
                         if changes['orders']:
                             for order in changes['orders']:
-                                if order['order_type'] == 'limit' and f_limit_order.if_placed == True:
-                                    if order['order_state'] == 'open' or order['order_id'] == f_limit_order.order.get('order_id', ''):
-                                        f_limit_order.order = order
-                                        f_limit_order.if_changing = False
+                                if order['order_type'] == 'limit' and f_limit_order.if_placed == True and f_limit_order.label == order['label']:
+                                    f_limit_order.order = order
+                                    f_limit_order.if_changing = False
+                                    break
                     elif changes['instrument_name'] == PERPETUAL:
                         if changes['trades']:
                             filled = sum([tx['amount'] if tx['order_type'] == 'limit' else 0 for tx in changes['trades']])
@@ -266,10 +270,10 @@ class FutureArbitrage(ServiceBase):
                             perpetual_size = changes['positions'][0]['size']
                         if changes['orders']:
                             for order in changes['orders']:
-                                if order['order_type'] == 'limit' and p_limit_order.if_placed == True:
-                                    if order['order_state'] == 'open' or order['order_id'] == p_limit_order.order.get('order_id', ''):
-                                        p_limit_order.order = order
-                                        p_limit_order.if_changing = False
+                                if order['order_type'] == 'limit' and p_limit_order.if_placed == True and p_limit_order.label == order['label']:
+                                    p_limit_order.order = order
+                                    p_limit_order.if_changing = False
+                                    break
                 elif msg['type'] == 'user.portfolio':
                     portfolio = msg['data']
                     margin = [portfolio['equity'], portfolio['initial_margin'], portfolio['maintenance_margin']]

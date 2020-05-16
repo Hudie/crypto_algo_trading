@@ -25,7 +25,7 @@ expiration = time.mktime(time.strptime(get_expiration(N_QUARTERLY_FUTURE), '%d%m
 
 
 class OrderState():
-    def __init__(self, if_placed=False, if_changing=False, if_cancelling=False,  order={}):
+    def __init__(self, if_placed=False, if_changing=False, if_cancelling=False, order={}):
         self.if_placed = if_placed
         self.if_changing = if_changing
         self.if_cancelling = if_cancelling
@@ -74,6 +74,8 @@ class FutureArbitrage(ServiceBase):
         try:
             global future, future_size, f_limit_order, perpetual, perpetual_size, p_limit_order, margin
             pos_idx = sum([1 if max(abs(future_size), abs(perpetual_size)) >= i else 0 for i in N_POSITION_SIZE_THRESHOLD])
+            if pos_idx == len(N_POSITION_SIZE_THRESHOLD):
+                return False
             min_left = (expiration - time.time())/60
             if (future.bid + future.ask)/2 >= future.index_price:
                 premium = ((future.bid + future.ask)/2 - max(future.index_price, (perpetual.bid + perpetual.ask)/2))/future.index_price * (525600/min_left) * 100
