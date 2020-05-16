@@ -86,7 +86,7 @@ class FutureArbitrage(ServiceBase):
                 if not f_limit_order.if_placed:
                     self.logger.info('**** entry premium: {}, future limit ****'.format(premium))
                     await self.deribittdreq.send_string(json.dumps({
-                        'accountid': DERIBIT_ACCOUNT_ID, 'method': 'sell',
+                        'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'sell',
                         'params': {'instrument_name': N_QUARTERLY_FUTURE,
                                    'amount': min(N_SIZE_PER_TRADE, perpetual.asksize),
                                    'type': 'limit',
@@ -101,7 +101,7 @@ class FutureArbitrage(ServiceBase):
                             if future.ask < f_limit_order.order['price'] and not f_limit_order.if_changing:
                                 self.logger.info('**** entry change price to: {}, future limit ****'.format(future.ask - MINIMUM_TICK_SIZE))
                                 await self.deribittdreq.send_string(json.dumps({
-                                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
+                                    'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'edit',
                                     'params': {'order_id': f_limit_order.order['order_id'],
                                                'amount': min(N_SIZE_PER_TRADE, perpetual.asksize),
                                                'price': future.ask - MINIMUM_TICK_SIZE,
@@ -114,7 +114,7 @@ class FutureArbitrage(ServiceBase):
                 if not p_limit_order.if_placed:
                     self.logger.info('**** entry premium: {}, perpetual limit ****'.format(premium))
                     await self.deribittdreq.send_string(json.dumps({
-                        'accountid': DERIBIT_ACCOUNT_ID, 'method': 'buy',
+                        'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'buy',
                         'params': {'instrument_name': PERPETUAL,
                                    'amount': min(N_SIZE_PER_TRADE, future.bidsize),
                                    'type': 'limit',
@@ -129,7 +129,7 @@ class FutureArbitrage(ServiceBase):
                             if perpetual.bid > p_limit_order.order['price'] and not p_limit_order.if_changing:
                                 self.logger.info('**** entry change price to: {}, perpetual limit ****'.format(perpetual.bid + MINIMUM_TICK_SIZE))
                                 await self.deribittdreq.send_string(json.dumps({
-                                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
+                                    'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'edit',
                                     'params': {'order_id': p_limit_order.order['order_id'],
                                                'amount': min(N_SIZE_PER_TRADE, future.bidsize),
                                                'price': perpetual.bid + MINIMUM_TICK_SIZE,
@@ -145,7 +145,7 @@ class FutureArbitrage(ServiceBase):
                 if not f_limit_order.if_placed:
                     self.logger.info('**** reverse entry premium: {}, future limit ****'.format(premium))
                     await self.deribittdreq.send_string(json.dumps({
-                        'accountid': DERIBIT_ACCOUNT_ID, 'method': 'buy',
+                        'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'buy',
                         'params': {'instrument_name': N_QUARTERLY_FUTURE,
                                    'amount': min(N_SIZE_PER_TRADE, perpetual.bidsize),
                                    'type': 'limit',
@@ -160,7 +160,7 @@ class FutureArbitrage(ServiceBase):
                             if future.bid > f_limit_order.order['price'] and not f_limit_order.if_changing:
                                 self.logger.info('**** reverse entry change price to: {}, future limit ****'.format(future.bid + MINIMUM_TICK_SIZE))
                                 await self.deribittdreq.send_string(json.dumps({
-                                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
+                                    'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'edit',
                                     'params': {'order_id': f_limit_order.order['order_id'],
                                                'amount': min(N_SIZE_PER_TRADE, perpetual.bidsize),
                                                'price': future.bid + MINIMUM_TICK_SIZE,
@@ -173,7 +173,7 @@ class FutureArbitrage(ServiceBase):
                 if not p_limit_order.if_placed:
                     self.logger.info('**** reverse entry premium: {}, perpetual limit ****'.format(premium))
                     await self.deribittdreq.send_string(json.dumps({
-                        'accountid': DERIBIT_ACCOUNT_ID, 'method': 'sell',
+                        'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'sell',
                         'params': {'instrument_name': PERPETUAL,
                                    'amount': min(N_SIZE_PER_TRADE, future.asksize),
                                    'type': 'limit',
@@ -188,7 +188,7 @@ class FutureArbitrage(ServiceBase):
                             if perpetual.ask < p_limit_order.order['price'] and not p_limit_order.if_changing:
                                 self.logger.info('**** reverse entry change price to: {}, perpetual limit ****'.format(perpetual.ask - MINIMUM_TICK_SIZE))
                                 await self.deribittdreq.send_string(json.dumps({
-                                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
+                                    'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'edit',
                                     'params': {'order_id': p_limit_order.order['order_id'],
                                                'amount': min(N_SIZE_PER_TRADE, future.asksize),
                                                'price': perpetual.ask - MINIMUM_TICK_SIZE,
@@ -203,7 +203,7 @@ class FutureArbitrage(ServiceBase):
                 if not f_limit_order.if_placed:
                     self.logger.info('**** exit premium: {}, future limit ****'.format(premium))
                     await self.deribittdreq.send_string(json.dumps({
-                        'accountid': DERIBIT_ACCOUNT_ID, 'method': 'buy',
+                        'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'buy',
                         'params': {'instrument_name': N_QUARTERLY_FUTURE,
                                    'amount': min(N_SIZE_PER_TRADE, perpetual.bidsize, abs(future_size)),
                                    'type': 'limit',
@@ -218,7 +218,7 @@ class FutureArbitrage(ServiceBase):
                             if future.bid > f_limit_order.order['price'] and not f_limit_order.if_changing:
                                 self.logger.info('**** exit change price to: {}, future limit ****'.format(future.bid + MINIMUM_TICK_SIZE))
                                 await self.deribittdreq.send_string(json.dumps({
-                                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
+                                    'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'edit',
                                     'params': {'order_id': f_limit_order.order['order_id'],
                                                'amount': min(N_SIZE_PER_TRADE, perpetual.bidsize, abs(future_size)),
                                                'price': future.bid + MINIMUM_TICK_SIZE,
@@ -231,7 +231,7 @@ class FutureArbitrage(ServiceBase):
                 if not p_limit_order.if_placed:
                     self.logger.info('**** exit premium: {}, perpetual limit ****'.format(premium))
                     await self.deribittdreq.send_string(json.dumps({
-                        'accountid': DERIBIT_ACCOUNT_ID, 'method': 'sell',
+                        'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'sell',
                         'params': {'instrument_name': PERPETUAL,
                                    'amount': min(N_SIZE_PER_TRADE, future.asksize, abs(perpetual_size)),
                                    'type': 'limit',
@@ -246,7 +246,7 @@ class FutureArbitrage(ServiceBase):
                             if perpetual.ask < p_limit_order.order['price'] and not p_limit_order.if_changing:
                                 self.logger.info('**** exit change price to: {}, perpetual limit ****'.format(perpetual.ask - MINIMUM_TICK_SIZE))
                                 await self.deribittdreq.send_string(json.dumps({
-                                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
+                                    'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'edit',
                                     'params': {'order_id': p_limit_order.order['order_id'],
                                                'amount': min(N_SIZE_PER_TRADE, future.asksize, abs(perpetual_size)),
                                                'price': perpetual.ask - MINIMUM_TICK_SIZE,
@@ -261,7 +261,7 @@ class FutureArbitrage(ServiceBase):
                 if not f_limit_order.if_placed:
                     self.logger.info('**** exit premium: {}, future limit ****'.format(premium))
                     await self.deribittdreq.send_string(json.dumps({
-                        'accountid': DERIBIT_ACCOUNT_ID, 'method': 'sell',
+                        'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'sell',
                         'params': {'instrument_name': N_QUARTERLY_FUTURE,
                                    'amount': min(N_SIZE_PER_TRADE, perpetual.asksize, abs(future_size)),
                                    'type': 'limit',
@@ -276,7 +276,7 @@ class FutureArbitrage(ServiceBase):
                             if future.ask < f_limit_order.order['price'] and not f_limit_order.if_changing:
                                 self.logger.info('**** exit change price to: {}, future limit ****'.format(future.ask - MINIMUM_TICK_SIZE))
                                 await self.deribittdreq.send_string(json.dumps({
-                                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
+                                    'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'edit',
                                     'params': {'order_id': f_limit_order.order['order_id'],
                                                'amount': min(N_SIZE_PER_TRADE, perpetual.asksize, abs(future_size)),
                                                'price': future.ask - MINIMUM_TICK_SIZE,
@@ -289,7 +289,7 @@ class FutureArbitrage(ServiceBase):
                 if not p_limit_order.if_placed:
                     self.logger.info('**** exit premium: {}, perpetual limit ****'.format(premium))
                     await self.deribittdreq.send_string(json.dumps({
-                        'accountid': DERIBIT_ACCOUNT_ID, 'method': 'buy',
+                        'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'buy',
                         'params': {'instrument_name': PERPETUAL,
                                    'amount': min(N_SIZE_PER_TRADE, future.asksize, abs(perpetual_size)),
                                    'type': 'limit',
@@ -304,7 +304,7 @@ class FutureArbitrage(ServiceBase):
                             if perpetual.bid > p_limit_order.order['price'] and not p_limit_order.if_changing:
                                 self.logger.info('**** exit change price to: {}, perpetual limit ****'.format(perpetual.bid + MINIMUM_TICK_SIZE))
                                 await self.deribittdreq.send_string(json.dumps({
-                                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
+                                    'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'edit',
                                     'params': {'order_id': p_limit_order.order['order_id'],
                                                'amount': min(N_SIZE_PER_TRADE, future.bidsize, abs(perpetual_size)),
                                                'price': perpetual.bid + MINIMUM_TICK_SIZE,
@@ -319,7 +319,7 @@ class FutureArbitrage(ServiceBase):
                     if not f_limit_order.if_cancelling or not p_limit_order.if_cancelling:
                         self.logger.info('**** gap disppear, cancel_all ****')
                         await self.deribittdreq.send_string(json.dumps({
-                            'accountid': DERIBIT_ACCOUNT_ID, 'method': 'cancel_all', 'params': {}
+                            'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'cancel_all', 'params': {}
                         }))
                         await self.deribittdreq.recv_string()
                         f_limit_order.if_cancelling = True
@@ -351,7 +351,7 @@ class FutureArbitrage(ServiceBase):
                             filled = sum([tx['amount'] if tx['order_type'] == 'limit' else 0 for tx in changes['trades']])
                             if filled > 0:
                                 await self.deribittdreq.send_string(json.dumps({
-                                    'accountid': DERIBIT_ACCOUNT_ID,
+                                    'accountid': N_DERIBIT_ACCOUNT_ID,
                                     'method': 'buy' if changes['trades'][0]['direction'] == 'sell' else 'sell',
                                     'params': {'instrument_name': PERPETUAL, 'amount': filled, 'type': 'market',}
                                 }))
@@ -369,7 +369,7 @@ class FutureArbitrage(ServiceBase):
                             filled = sum([tx['amount'] if tx['order_type'] == 'limit' else 0 for tx in changes['trades']])
                             if filled > 0:
                                 await self.deribittdreq.send_string(json.dumps({
-                                    'accountid': DERIBIT_ACCOUNT_ID,
+                                    'accountid': N_DERIBIT_ACCOUNT_ID,
                                     'method': 'buy' if changes['trades'][0]['direction'] == 'sell' else 'sell',
                                     'params': {'instrument_name': N_QUARTERLY_FUTURE, 'amount': filled, 'type': 'market',}
                                 }))
@@ -418,7 +418,7 @@ class FutureArbitrage(ServiceBase):
                 else:
                     self.logger.info('cant receive msg from future md')
                     self.deribittdreq.send_string(json.dumps({
-                        'accountid': DERIBIT_ACCOUNT_ID, 'method': 'cancel_all', 'params': {}
+                        'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'cancel_all', 'params': {}
                     }))
                     self.deribittdreq.recv_string()
         except Exception as e:
@@ -428,13 +428,13 @@ class FutureArbitrage(ServiceBase):
     async def sub_msg_td(self):
         try:
             await self.deribittdreq.send_string(json.dumps({
-                'accountid': DERIBIT_ACCOUNT_ID, 'method': 'get_positions',
+                'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'get_positions',
                 'params': {'currency': SYMBOL, 'kind': 'future'}
             }))
             await self.deribittdreq.recv_string()
             while self.state == ServiceState.started:
                 msg = json.loads(await self.deribittd.recv_string())
-                if msg['accountid'] == DERIBIT_ACCOUNT_ID:
+                if msg['accountid'] == N_DERIBIT_ACCOUNT_ID:
                     await self.msg.put(msg)
         except Exception as e:
             self.logger.exception(e)
@@ -452,5 +452,5 @@ class FutureArbitrage(ServiceBase):
             
             
 if __name__ == '__main__':
-    service = FutureArbitrage('arb-new')
+    service = FutureArbitrage('n-future-arb')
     start_service(service, {})
