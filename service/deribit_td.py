@@ -161,7 +161,8 @@ class DeribitTD(ServiceBase):
                             await self.pubserver.send_string(json.dumps({
                                 'accountid': account.id,
                                 'type': MSG_MAP[response.get('id')],
-                                'data': response.get('result', {})}))
+                                'data': response.get('result', {}),
+                                'error': response.get('error', {})}))
                         elif response.get('params', ''):
                             if response['params']['channel'].startswith('user.portfolio'):
                                 self.pubserver.send_string(json.dumps({

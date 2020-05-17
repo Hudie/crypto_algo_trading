@@ -228,6 +228,12 @@ class FutureArbitrage(ServiceBase):
                 msg = await self.msg.get()
                 if msg['type'] not in ('quote', 'user.portfolio', 'buy', 'sell', 'edit'):
                     self.logger.info('---- td res: {}, {}'.format(msg['type'], msg['data']))
+                if msg.get('error', ''):
+                    await self.deribittdreq.send_string(json.dumps({
+                        'accountid': DERIBIT_ACCOUNT_ID, 'method': 'cancel_all', 'params': {}
+                    }))
+                    await self.deribittdreq.recv_string()
+                    continue
                     
                 if msg['type'] == 'quote':
                     d = msg['data']
@@ -309,10 +315,10 @@ class FutureArbitrage(ServiceBase):
                         await self.msg.put(msg)
                 else:
                     self.logger.info('cant receive msg from future md')
-                    self.deribittdreq.send_string(json.dumps({
+                    await self.deribittdreq.send_string(json.dumps({
                         'accountid': DERIBIT_ACCOUNT_ID, 'method': 'cancel_all', 'params': {}
                     }))
-                    self.deribittdreq.recv_string()
+                    await self.deribittdreq.recv_string()
         except Exception as e:
             self.logger.exception(e)
             await self.sub_msg_md()

@@ -17,9 +17,9 @@ SEASON_FUTURE = 'BTC-26JUN20'
 
 SIZE_PER_TRADE = 300
 TX_ENTRY_GAP = [4.2, 4.8, 5.4, 6]	# premium rate
-TX_EXIT_GAP = 0.8			# premium rate
+TX_EXIT_GAP = 1.8			# premium rate
 TX_ENTRY_PRICE_GAP = 0.3		# percentage of current price
-POSITION_SIZE_THRESHOLD = [250000 * i for i in [1, 2, 3, 4]]
+POSITION_SIZE_THRESHOLD = [300000 * i for i in [1, 2, 3, 4]]
 
 # parameters for next quarterly future
 N_QUARTERLY_FUTURE = 'BTC-25SEP20'
