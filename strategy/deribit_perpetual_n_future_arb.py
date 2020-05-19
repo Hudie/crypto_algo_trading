@@ -339,6 +339,25 @@ class FutureArbitrage(ServiceBase):
             self.logger.exception(e)
             await self.sub_msg_td()
 
+    async def balance_positions(self):
+        try:
+            global f_limit_order, p_limit_order
+            await asyncio.sleep(60)
+            if not (f_limit_order.if_placed or p_limit_order.if_placed):
+                unbalanced = future_size + perpetual_size
+                if unbalanced != 0:
+                    await self.deribittdreq.send_string(json.dumps({
+                        'accountid': N_DERIBIT_ACCOUNT_ID,
+                        'method': 'sell' if unbalanced > 0 else 'buy',
+                        'params': {'instrument_name': N_QUARTERLY_FUTURE if abs(future_size) > abs(perpetual_size) else PERPETUAL,
+                                   'amount': abs(unbalanced),
+                                   'type': 'market',}
+                    }))
+                    await self.deribittdreq.recv_string()
+        except Exception as e:
+            self.logger.exception(e)
+            await self.balance_positions()
+
     async def run(self):
         if self.state == ServiceState.started:
             self.logger.error('tried to run service, but state is %s' % self.state)
@@ -347,6 +366,7 @@ class FutureArbitrage(ServiceBase):
             asyncio.ensure_future(self.process_msg())
             asyncio.ensure_future(self.sub_msg_md())
             asyncio.ensure_future(self.sub_msg_td())
+            asyncio.ensure_future(self.balance_positions())
 
             
             
