@@ -95,7 +95,8 @@ class FutureArbitrage(ServiceBase):
                     await self.deribittdreq.send_string(json.dumps({
                         'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'sell',
                         'params': {'instrument_name': N_QUARTERLY_FUTURE,
-                                   'amount': min(N_SIZE_PER_TRADE, perpetual.asksize, abs(future_size)),
+                                   'amount': min(N_SIZE_PER_TRADE, perpetual.asksize,
+                                                 abs(future_size) if abs(future_size) > 0 else N_SIZE_PER_TRADE),
                                    'type': 'limit',
                                    'price': future.ask - MINIMUM_TICK_SIZE,
                                    'post_only': True, }
@@ -110,7 +111,8 @@ class FutureArbitrage(ServiceBase):
                                 await self.deribittdreq.send_string(json.dumps({
                                     'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'edit',
                                     'params': {'order_id': f_limit_order.order['order_id'],
-                                               'amount': min(N_SIZE_PER_TRADE, perpetual.asksize, abs(future_size)),
+                                               'amount': min(N_SIZE_PER_TRADE, perpetual.asksize,
+                                                             abs(future_size) if abs(future_size) > 0 else N_SIZE_PER_TRADE),
                                                'price': future.ask - MINIMUM_TICK_SIZE,
                                                'post_only': True, }
                                 }))
@@ -123,7 +125,8 @@ class FutureArbitrage(ServiceBase):
                     await self.deribittdreq.send_string(json.dumps({
                         'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'buy',
                         'params': {'instrument_name': PERPETUAL,
-                                   'amount': min(N_SIZE_PER_TRADE, future.bidsize, abs(perpetual_size)),
+                                   'amount': min(N_SIZE_PER_TRADE, future.bidsize,
+                                                 abs(perpetual_size) if abs(perpetual_size) > 0 else N_SIZE_PER_TRADE),
                                    'type': 'limit',
                                    'price': perpetual.bid + MINIMUM_TICK_SIZE,
                                    'post_only': True, }
@@ -138,7 +141,8 @@ class FutureArbitrage(ServiceBase):
                                 await self.deribittdreq.send_string(json.dumps({
                                     'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'edit',
                                     'params': {'order_id': p_limit_order.order['order_id'],
-                                               'amount': min(N_SIZE_PER_TRADE, future.bidsize, abs(perpetual_size)),
+                                               'amount': min(N_SIZE_PER_TRADE, future.bidsize,
+                                                             abs(perpetual_size) if abs(perpetual_size) > 0 else N_SIZE_PER_TRADE),
                                                'price': perpetual.bid + MINIMUM_TICK_SIZE,
                                                'post_only': True, }
                                 }))
@@ -156,7 +160,8 @@ class FutureArbitrage(ServiceBase):
                     await self.deribittdreq.send_string(json.dumps({
                         'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'buy',
                         'params': {'instrument_name': N_QUARTERLY_FUTURE,
-                                   'amount': min(N_SIZE_PER_TRADE, perpetual.bidsize, abs(future_size)),
+                                   'amount': min(N_SIZE_PER_TRADE, perpetual.bidsize,
+                                                 abs(future_size) if abs(future_size) > 0 else N_SIZE_PER_TRADE),
                                    'type': 'limit',
                                    'price': future.bid + MINIMUM_TICK_SIZE,
                                    'post_only': True, }
@@ -171,7 +176,8 @@ class FutureArbitrage(ServiceBase):
                                 await self.deribittdreq.send_string(json.dumps({
                                     'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'edit',
                                     'params': {'order_id': f_limit_order.order['order_id'],
-                                               'amount': min(N_SIZE_PER_TRADE, perpetual.bidsize, abs(future_size)),
+                                               'amount': min(N_SIZE_PER_TRADE, perpetual.bidsize,
+                                                             abs(future_size) if abs(future_size) > 0 else N_SIZE_PER_TRADE),
                                                'price': future.bid + MINIMUM_TICK_SIZE,
                                                'post_only': True, }
                                 }))
@@ -184,7 +190,8 @@ class FutureArbitrage(ServiceBase):
                     await self.deribittdreq.send_string(json.dumps({
                         'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'sell',
                         'params': {'instrument_name': PERPETUAL,
-                                   'amount': min(N_SIZE_PER_TRADE, future.asksize, abs(perpetual_size)),
+                                   'amount': min(N_SIZE_PER_TRADE, future.asksize,
+                                                 abs(perpetual_size) if abs(perpetual_size) > 0 else N_SIZE_PER_TRADE),
                                    'type': 'limit',
                                    'price': perpetual.ask - MINIMUM_TICK_SIZE,
                                    'post_only': True, }
@@ -199,7 +206,8 @@ class FutureArbitrage(ServiceBase):
                                 await self.deribittdreq.send_string(json.dumps({
                                     'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'edit',
                                     'params': {'order_id': p_limit_order.order['order_id'],
-                                               'amount': min(N_SIZE_PER_TRADE, future.asksize, abs(perpetual_size)),
+                                               'amount': min(N_SIZE_PER_TRADE, future.asksize,
+                                                             abs(perpetual_size) if abs(perpetual_size) > 0 else N_SIZE_PER_TRADE),
                                                'price': perpetual.ask - MINIMUM_TICK_SIZE,
                                                'post_only': True, }
                                 }))
