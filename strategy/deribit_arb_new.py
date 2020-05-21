@@ -78,9 +78,9 @@ class FutureArbitrage(ServiceBase):
             pos_idx = sum([1 if max(abs(future_size), abs(perpetual_size)) >= i else 0 for i in POSITION_SIZE_THRESHOLD])
             min_left = (expiration - time.time())/60
             if (future.bid + future.ask)/2 >= future.index_price:
-                premium = ((future.bid + future.ask)/2 - max(future.index_price, (perpetual.bid + perpetual.ask)/2))/future.index_price * (525600/min_left) * 100
+                premium = ((future.bid+future.ask)/2 - (perpetual.bid+perpetual.ask)/2) / future.index_price * (525600/min_left) * 100
             else:
-                premium = (min(future.index_price, (perpetual.bid + perpetual.ask)/2) - (future.bid + future.ask)/2)/future.index_price * (525600/min_left) * 100
+                premium = ((perpetual.bid+perpetual.ask)/2 - (future.bid+future.ask)/2) / future.index_price * (525600/min_left) * 100
             if pos_idx == len(POSITION_SIZE_THRESHOLD) and premium >= TX_ENTRY_GAP[0]:
                 return False
             pos_idx = min(pos_idx, len(TX_ENTRY_GAP)-1)
