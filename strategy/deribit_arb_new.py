@@ -8,7 +8,6 @@ import json
 import time
 
 
-
 margin = [0, 0, 0]
 future = None
 future_size = 0
@@ -18,8 +17,12 @@ perpetual_size = 0
 
 def get_expiration(sym):
     ex = sym.split('-')[1]
-    return ex.replace(ex[2:5], {'JAN':'01','FEB':'02','MAR':'03','APR':'04','MAY':'05','JUN':'06',
-                                'JUL':'07','AUG':'08','SEP':'09','OCT':'10','NOV':'11','DEC':'12'}[ex[2:5]])
+    return ex.replace(ex[2:5],
+                      {'JAN': '01', 'FEB': '02', 'MAR': '03',
+                       'APR': '04', 'MAY': '05', 'JUN': '06',
+                       'JUL': '07', 'AUG': '08', 'SEP': '09',
+                       'OCT': '10', 'NOV': '11', 'DEC': '12'}[ex[2:5]])
+
 
 expiration = time.mktime(time.strptime(get_expiration(SEASON_FUTURE), '%d%m%y')) + 3600*8
 
@@ -39,6 +42,7 @@ class OrderState():
         self.label = ''
         self.order = {}
 
+
 f_limit_order = OrderState()
 p_limit_order = OrderState()
 
@@ -53,7 +57,7 @@ class Quote():
 
 
 class FutureArbitrage(ServiceBase):
-    
+
     def __init__(self, logger_name):
         ServiceBase.__init__(self, logger_name)
         # subscribe market data
@@ -77,13 +81,11 @@ class FutureArbitrage(ServiceBase):
             global future, future_size, f_limit_order, perpetual, perpetual_size, p_limit_order, margin
             pos_idx = sum([1 if max(abs(future_size), abs(perpetual_size)) >= i else 0 for i in POSITION_SIZE_THRESHOLD])
             min_left = (expiration - time.time())/60
-            if (future.bid + future.ask)/2 >= future.index_price:
-                premium = ((future.bid+future.ask)/2 - (perpetual.bid+perpetual.ask)/2) / future.index_price * (525600/min_left) * 100
-            else:
-                premium = ((perpetual.bid+perpetual.ask)/2 - (future.bid+future.ask)/2) / future.index_price * (525600/min_left) * 100
+            premium = ((future.bid+future.ask)/2 - (perpetual.bid+perpetual.ask)/2) / future.index_price * (525600/min_left) * 100
             if pos_idx == len(POSITION_SIZE_THRESHOLD) and premium >= TX_ENTRY_GAP[0]:
                 return False
             pos_idx = min(pos_idx, len(TX_ENTRY_GAP)-1)
+
             # future > perpetual situation
             if any((all((min(future.bid-perpetual.bid, future.ask-perpetual.ask) >= TX_ENTRY_PRICE_GAP/100*future.index_price,
                          premium >= TX_ENTRY_GAP[pos_idx])),
@@ -242,7 +244,7 @@ class FutureArbitrage(ServiceBase):
                     }))
                     await self.deribittdreq.recv_string()
                     continue
-                    
+
                 if msg['type'] == 'quote':
                     d = msg['data']
                     if d['instrument_name'] == PERPETUAL:
@@ -259,7 +261,7 @@ class FutureArbitrage(ServiceBase):
                                 await self.deribittdreq.send_string(json.dumps({
                                     'accountid': DERIBIT_ACCOUNT_ID,
                                     'method': 'buy' if changes['trades'][0]['direction'] == 'sell' else 'sell',
-                                    'params': {'instrument_name': PERPETUAL, 'amount': filled, 'type': 'market',}
+                                    'params': {'instrument_name': PERPETUAL, 'amount': filled, 'type': 'market', }
                                 }))
                                 await self.deribittdreq.recv_string()
                         if changes['positions']:
@@ -277,7 +279,7 @@ class FutureArbitrage(ServiceBase):
                                 await self.deribittdreq.send_string(json.dumps({
                                     'accountid': DERIBIT_ACCOUNT_ID,
                                     'method': 'buy' if changes['trades'][0]['direction'] == 'sell' else 'sell',
-                                    'params': {'instrument_name': SEASON_FUTURE, 'amount': filled, 'type': 'market',}
+                                    'params': {'instrument_name': SEASON_FUTURE, 'amount': filled, 'type': 'market', }
                                 }))
                                 await self.deribittdreq.recv_string()
                         if changes['positions']:
@@ -302,12 +304,12 @@ class FutureArbitrage(ServiceBase):
                             perpetual_size = d['size']
                 elif msg['type'] in ('buy', 'sell', 'edit'):
                     pass
-                    
+
                 self.msg.task_done()
         except Exception as e:
             self.logger.exception(e)
             await self.process_msg()
-            
+
     async def sub_msg_md(self):
         try:
             await asyncio.sleep(1)
@@ -317,7 +319,7 @@ class FutureArbitrage(ServiceBase):
                 for t in pending:
                     t.cancel()
                 msg = json.loads(done.pop().result()) if done else {}
-                    
+
                 if msg:
                     if msg['type'] == 'quote':
                         await self.msg.put(msg)
@@ -349,18 +351,19 @@ class FutureArbitrage(ServiceBase):
     async def balance_positions(self):
         try:
             global f_limit_order, p_limit_order
-            await asyncio.sleep(60)
-            if not (f_limit_order.if_placed or p_limit_order.if_placed):
-                unbalanced = future_size + perpetual_size
-                if unbalanced != 0:
-                    await self.deribittdreq.send_string(json.dumps({
-                        'accountid': DERIBIT_ACCOUNT_ID,
-                        'method': 'sell' if unbalanced > 0 else 'buy',
-                        'params': {'instrument_name': SEASON_FUTURE if abs(future_size) > abs(perpetual_size) else PERPETUAL,
-                                   'amount': abs(unbalanced),
-                                   'type': 'market',}
-                    }))
-                    await self.deribittdreq.recv_string()
+            while self.state == ServiceState.started:
+                await asyncio.sleep(60)
+                if not (f_limit_order.if_placed or p_limit_order.if_placed):
+                    unbalanced = future_size + perpetual_size
+                    if unbalanced != 0:
+                        await self.deribittdreq.send_string(json.dumps({
+                            'accountid': DERIBIT_ACCOUNT_ID,
+                            'method': 'sell' if unbalanced > 0 else 'buy',
+                            'params': {'instrument_name': SEASON_FUTURE if abs(future_size) > abs(perpetual_size) else PERPETUAL,
+                                       'amount': abs(unbalanced),
+                                       'type': 'market', }
+                        }))
+                        await self.deribittdreq.recv_string()
         except Exception as e:
             self.logger.exception(e)
             await self.balance_positions()
@@ -375,8 +378,7 @@ class FutureArbitrage(ServiceBase):
             asyncio.ensure_future(self.sub_msg_td())
             asyncio.ensure_future(self.balance_positions())
 
-            
-            
+
 if __name__ == '__main__':
     service = FutureArbitrage('arb-new')
     start_service(service, {})

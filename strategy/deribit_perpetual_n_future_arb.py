@@ -76,15 +76,12 @@ class FutureArbitrage(ServiceBase):
         try:
             global future, future_size, f_limit_order, perpetual, perpetual_size, p_limit_order, margin
             pos_idx = sum([1 if max(abs(future_size), abs(perpetual_size)) >= i else 0 for i in N_POSITION_SIZE_THRESHOLD])
-            
             min_left = (expiration - time.time())/60
-            if (future.bid + future.ask)/2 >= future.index_price:
-                premium = ((future.bid+future.ask)/2 - (perpetual.bid+perpetual.ask)/2) / future.index_price * (525600/min_left) * 100
-            else:
-                premium = ((perpetual.bid+perpetual.ask)/2 - (future.bid+future.ask)/2) / future.index_price * (525600/min_left) * 100
+            premium = ((future.bid+future.ask)/2 - (perpetual.bid+perpetual.ask)/2) / future.index_price * (525600/min_left) * 100
             if pos_idx == len(N_POSITION_SIZE_THRESHOLD) and premium >= N_TX_ENTRY_GAP[0]:
                 return False
             pos_idx = min(pos_idx, len(N_TX_ENTRY_GAP)-1)
+            
             # future > perpetual situation
             if any((all((min(future.bid-perpetual.bid, future.ask-perpetual.ask) >= N_TX_ENTRY_PRICE_GAP/100*future.index_price,
                          premium >= N_TX_ENTRY_GAP[pos_idx])),
@@ -350,18 +347,19 @@ class FutureArbitrage(ServiceBase):
     async def balance_positions(self):
         try:
             global f_limit_order, p_limit_order
-            await asyncio.sleep(60)
-            if not (f_limit_order.if_placed or p_limit_order.if_placed):
-                unbalanced = future_size + perpetual_size
-                if unbalanced != 0:
-                    await self.deribittdreq.send_string(json.dumps({
-                        'accountid': N_DERIBIT_ACCOUNT_ID,
-                        'method': 'sell' if unbalanced > 0 else 'buy',
-                        'params': {'instrument_name': N_QUARTERLY_FUTURE if abs(future_size) > abs(perpetual_size) else PERPETUAL,
-                                   'amount': abs(unbalanced),
-                                   'type': 'market',}
-                    }))
-                    await self.deribittdreq.recv_string()
+            while self.state == ServiceState.started:
+                await asyncio.sleep(60)
+                if not (f_limit_order.if_placed or p_limit_order.if_placed):
+                    unbalanced = future_size + perpetual_size
+                    if unbalanced != 0:
+                        await self.deribittdreq.send_string(json.dumps({
+                            'accountid': N_DERIBIT_ACCOUNT_ID,
+                            'method': 'sell' if unbalanced > 0 else 'buy',
+                            'params': {'instrument_name': N_QUARTERLY_FUTURE if abs(future_size) > abs(perpetual_size) else PERPETUAL,
+                                       'amount': abs(unbalanced),
+                                       'type': 'market',}
+                        }))
+                        await self.deribittdreq.recv_string()
         except Exception as e:
             self.logger.exception(e)
             await self.balance_positions()
