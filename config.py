@@ -16,11 +16,11 @@ PERPETUAL = 'BTC-PERPETUAL'
 SEASON_FUTURE = 'BTC-26JUN20'
 
 SIZE_PER_TRADE = 990
-# TX_ENTRY_GAP = [4.5, 5.5, 6.5, 7.5, 8.5, 9.5]	# premium rate
-TX_ENTRY_GAP = [4.2, 5, 6, 7, 8, 9, 10]	# premium rate
-TX_EXIT_GAP = 2
+TX_ENTRY_GAP = [4.2, 5, 6, 7, 8, 9, 10]		# premium rate
+TX_EXIT_GAP = 2					# premium rate
 TX_ENTRY_PRICE_GAP = 0.3			# percentage of current price
 POSITION_SIZE_THRESHOLD = [200000 * i for i in [1, 2, 3, 4, 5, 6, 7]]
+MARGIN_THRESHOLD = 0.9			# close position when second threshold is met
 
 # parameters for next quarterly future
 N_QUARTERLY_FUTURE = 'BTC-25SEP20'
@@ -28,5 +28,5 @@ N_QUARTERLY_FUTURE = 'BTC-25SEP20'
 N_SIZE_PER_TRADE = 990
 N_TX_ENTRY_GAP = [5, 6, 7, 8, 9, 10]
 N_TX_EXIT_GAP = 2.4
-N_TX_ENTRY_PRICE_GAP = 0.3		# percentage of current price
+N_TX_ENTRY_PRICE_GAP = 0.3
 N_POSITION_SIZE_THRESHOLD = [200000 * i for i in [1, 2, 3, 4, 5, 6]]

@@ -8,7 +8,7 @@ import json
 import time
 
 
-margin = [0, 0, 0]
+margin = [0, 0, 0]	# equity, initial_margin, maintenance_margin
 future = None
 future_size = 0
 perpetual = None
@@ -82,7 +82,9 @@ class FutureArbitrage(ServiceBase):
             pos_idx = sum([1 if max(abs(future_size), abs(perpetual_size)) >= i else 0 for i in POSITION_SIZE_THRESHOLD])
             min_left = (expiration - time.time())/60
             premium = ((future.bid+future.ask)/2 - (perpetual.bid+perpetual.ask)/2) / future.index_price * (525600/min_left) * 100
-            if pos_idx == len(POSITION_SIZE_THRESHOLD) and premium >= TX_ENTRY_GAP[0]:
+            if all((pos_idx == len(POSITION_SIZE_THRESHOLD) or margin[1] >= margin[0],
+                    abs(premium) > TX_EXIT_GAP,
+                    margin[2] < margin[0] * MARGIN_THRESHOLD)):
                 return False
             pos_idx = min(pos_idx, len(TX_ENTRY_GAP)-1)
 
@@ -90,7 +92,9 @@ class FutureArbitrage(ServiceBase):
             if any((all((min(future.bid-perpetual.bid, future.ask-perpetual.ask) >= TX_ENTRY_PRICE_GAP/100*future.index_price,
                          premium >= TX_ENTRY_GAP[pos_idx])),
                     # or close position when gap disppears in case of longing future and shorting perpetual
-                    premium >= - TX_EXIT_GAP and future_size > 0 and perpetual_size < 0)):
+                    all((premium >= - TX_EXIT_GAP or margin[2] >= margin[0] * MARGIN_THRESHOLD,
+                         future_size > 0,
+                         perpetual_size < 0)), )):
                 if not f_limit_order.if_placed:
                     self.logger.info('**** premium: {}, trigger future sell limit order ****'.format(premium))
                     await self.deribittdreq.send_string(json.dumps({
@@ -155,7 +159,9 @@ class FutureArbitrage(ServiceBase):
             elif any((all((min(perpetual.bid-future.bid, perpetual.ask-future.ask) >= TX_ENTRY_PRICE_GAP/100*future.index_price,
                            premium <= - TX_ENTRY_GAP[pos_idx])),
                       # or close position when gap disppears in case of shorting future and longing perpetual
-                      premium <= TX_EXIT_GAP and future_size < 0 and perpetual_size > 0)):
+                      all((premium <= TX_EXIT_GAP or margin[2] >= margin[0] * MARGIN_THRESHOLD,
+                           future_size < 0,
+                           perpetual_size > 0)), )):
                 if not f_limit_order.if_placed:
                     self.logger.info('**** premium: {}, future buy limit order ****'.format(premium))
                     await self.deribittdreq.send_string(json.dumps({
@@ -302,6 +308,9 @@ class FutureArbitrage(ServiceBase):
                             future_size = d['size']
                         elif d['instrument_name'] == PERPETUAL:
                             perpetual_size = d['size']
+                elif msg['type'] == 'account_summary':
+                    d = msg['data']
+                    margin = [d['equity'], d['initial_margin'], d['maintenance_margin']]
                 elif msg['type'] in ('buy', 'sell', 'edit'):
                     pass
 
@@ -338,6 +347,11 @@ class FutureArbitrage(ServiceBase):
             await self.deribittdreq.send_string(json.dumps({
                 'accountid': DERIBIT_ACCOUNT_ID, 'method': 'get_positions',
                 'params': {'currency': SYMBOL, 'kind': 'future'}
+            }))
+            await self.deribittdreq.recv_string()
+            await self.deribittdreq.send_string(json.dumps({
+                'accountid': DERIBIT_ACCOUNT_ID, 'method': 'get_account_summary',
+                'params': {'currency': SYMBOL, }
             }))
             await self.deribittdreq.recv_string()
             while self.state == ServiceState.started:
