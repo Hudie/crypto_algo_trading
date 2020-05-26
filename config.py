@@ -27,6 +27,6 @@ N_QUARTERLY_FUTURE = 'BTC-25SEP20'
 
 N_SIZE_PER_TRADE = 990
 N_TX_ENTRY_GAP = [5, 6, 7, 8, 9, 10]
-N_TX_EXIT_GAP = 3.15
+N_TX_EXIT_GAP = 2.4
 N_TX_ENTRY_PRICE_GAP = 0.3		# percentage of current price
 N_POSITION_SIZE_THRESHOLD = [200000 * i for i in [1, 2, 3, 4, 5, 6]]
