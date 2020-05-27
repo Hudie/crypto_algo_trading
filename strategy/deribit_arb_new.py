@@ -8,7 +8,8 @@ import json
 import time
 
 
-margin = [0, 0, 0]	# equity, initial_margin, maintenance_margin
+# margin: [equity, initial_margin, maintenance_margin]
+margin = [0, 0, 0]
 future = None
 future_size = 0
 perpetual = None
@@ -79,20 +80,19 @@ class FutureArbitrage(ServiceBase):
     async def find_quotes_gap(self):
         try:
             global future, future_size, f_limit_order, perpetual, perpetual_size, p_limit_order, margin
-            pos_idx = sum([1 if max(abs(future_size), abs(perpetual_size)) >= i else 0 for i in POSITION_SIZE_THRESHOLD])
             min_left = (expiration - time.time())/60
             premium = ((future.bid+future.ask)/2 - (perpetual.bid+perpetual.ask)/2) / future.index_price * (525600/min_left) * 100
-            if all((pos_idx == len(POSITION_SIZE_THRESHOLD) or margin[1] >= margin[0],
-                    abs(premium) > TX_EXIT_GAP,
-                    margin[2] < margin[0] * MARGIN_THRESHOLD)):
-                return False
-            pos_idx = min(pos_idx, len(TX_ENTRY_GAP)-1)
+            pos_idx = sum([1 if max(abs(future_size), abs(perpetual_size)) >= i else 0 for i in POSITION_SIZE_THRESHOLD])
 
             # future > perpetual situation
             if any((all((min(future.bid-perpetual.bid, future.ask-perpetual.ask) >= TX_ENTRY_PRICE_GAP/100*future.index_price,
-                         premium >= TX_ENTRY_GAP[pos_idx])),
-                    # or close position when gap disppears in case of longing future and shorting perpetual
-                    all((premium >= - TX_EXIT_GAP or margin[2] >= margin[0] * MARGIN_THRESHOLD,
+                         premium >= TX_ENTRY_GAP[min(pos_idx, len(TX_ENTRY_GAP)-1)],
+                         max(abs(future_size), abs(perpetual_size)) < POSITION_SIZE_THRESHOLD[-1],
+                         margin[1] < margin[0],
+                         margin[2] < margin[0] * MARGIN_THRESHOLD[0])),
+                    # or close position when gap disppears (or margin reaches close threshold)
+                    # in case of longing future and shorting perpetual
+                    all((premium >= - TX_EXIT_GAP or margin[2] >= margin[0] * MARGIN_THRESHOLD[1],
                          future_size > 0,
                          perpetual_size < 0)), )):
                 if not f_limit_order.if_placed:
@@ -157,9 +157,13 @@ class FutureArbitrage(ServiceBase):
                             p_limit_order.reset()
             # perpetual > future situation
             elif any((all((min(perpetual.bid-future.bid, perpetual.ask-future.ask) >= TX_ENTRY_PRICE_GAP/100*future.index_price,
-                           premium <= - TX_ENTRY_GAP[pos_idx])),
-                      # or close position when gap disppears in case of shorting future and longing perpetual
-                      all((premium <= TX_EXIT_GAP or margin[2] >= margin[0] * MARGIN_THRESHOLD,
+                           premium <= - TX_ENTRY_GAP[min(pos_idx, len(TX_ENTRY_GAP)-1)],
+                           max(abs(future_size), abs(perpetual_size)) < POSITION_SIZE_THRESHOLD[-1],
+                           margin[1] < margin[0],
+                           margin[2] < margin[0] * MARGIN_THRESHOLD[0])),
+                      # or close position when gap disppears (or margin reaches close threshold)
+                      # in case of shorting future and longing perpetual
+                      all((premium <= TX_EXIT_GAP or margin[2] >= margin[0] * MARGIN_THRESHOLD[1],
                            future_size < 0,
                            perpetual_size > 0)), )):
                 if not f_limit_order.if_placed:
