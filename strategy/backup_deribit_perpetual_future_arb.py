@@ -44,7 +44,7 @@ class FutureArbitrage(ServiceBase):
             global current_order_idx
 
             gap = max(future[2] - perpetual[2], perpetual[0] - future[0])
-            gap_idx = max(sum([1 if gap >= i else 0 for i in TX_ENTRY_GAP]) - 1, 0)
+            gap_idx = max(sum([1 if gap >= i else 0 for i in N_TX_ENTRY_GAP]) - 1, 0)
             can_entry = False if max(abs(future_size), abs(perpetual_size)) >= POSITION_SIZE_THRESHOLD[gap_idx] else True
             can_exit = False if min(abs(future_size), abs(perpetual_size)) <= 100 else True
 
@@ -52,12 +52,12 @@ class FutureArbitrage(ServiceBase):
             #    gap_idx, can_place_order, if_order_cancelling, if_price_changing))
             
             # future > perpetual entry point
-            if future[2] - perpetual[2] >= TX_ENTRY_GAP[gap_idx] and can_place_order and can_entry:
+            if future[2] - perpetual[2] >= N_TX_ENTRY_GAP[gap_idx] and can_place_order and can_entry:
                 self.logger.info(' **** entry order gap: {}'.format(future[2] - perpetual[2]))
                 self.deribittdreq.send_string(json.dumps({
-                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'sell',
+                    'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'sell',
                     'params': {'instrument_name': SEASON_FUTURE,
-                               'amount': min(SIZE_PER_TRADE, perpetual[3]),
+                               'amount': min(N_SIZE_PER_TRADE, perpetual[3]),
                                'type': 'limit',
                                'price': max(future[2] - 0.5, future[0] + 0.5),
                                'post_only': True, }
@@ -66,26 +66,26 @@ class FutureArbitrage(ServiceBase):
                 current_order_idx = gap_idx
                 can_place_order = False
             # future > perpetual entry point: change limit order price
-            elif all((perpetual[2] + TX_ENTRY_GAP[max(gap_idx, current_order_idx)] - TX_ENTRY_GAP_CANCEL_DELTA <= future[2] < current_order.get('price', 0),
+            elif all((perpetual[2] + N_TX_ENTRY_GAP[max(gap_idx, current_order_idx)] - N_TX_ENTRY_GAP_CANCEL_DELTA <= future[2] < current_order.get('price', 0),
                       not if_price_changing,
                       current_order)):
                 self.logger.info('---- entry change price to: {} ----'.format(max(future[2] - 0.5, future[0] + 0.5)))
                 self.deribittdreq.send_string(json.dumps({
-                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
+                    'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'edit',
                     'params': {'order_id': current_order['order_id'],
-                               'amount': min(SIZE_PER_TRADE, perpetual[3]),
+                               'amount': min(N_SIZE_PER_TRADE, perpetual[3]),
                                'price': max(future[2] - 0.5, future[0] + 0.5),
                                'post_only': True, }
                 }))
                 self.deribittdreq.recv_string()
                 if_price_changing = True
             # perpetual > future entry point
-            elif perpetual[0] - future[0] >= TX_ENTRY_GAP[gap_idx] and can_place_order and can_entry:
+            elif perpetual[0] - future[0] >= N_TX_ENTRY_GAP[gap_idx] and can_place_order and can_entry:
                 self.logger.info(' **** entry order gap: {}'.format(future[0] - perpetual[0]))
                 self.deribittdreq.send_string(json.dumps({
-                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'buy',
+                    'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'buy',
                     'params': {'instrument_name': SEASON_FUTURE,
-                               'amount': min(SIZE_PER_TRADE, perpetual[1]),
+                               'amount': min(N_SIZE_PER_TRADE, perpetual[1]),
                                'type': 'limit',
                                'price': min(future[0] + 0.5, future[2] - 0.5),
                                'post_only': True, }
@@ -94,38 +94,38 @@ class FutureArbitrage(ServiceBase):
                 current_order_idx = gap_idx
                 can_place_order = False
             # perpetual > future entry point: change limit order price
-            elif all((perpetual[0] - TX_ENTRY_GAP[max(gap_idx, current_order_idx)] + TX_ENTRY_GAP_CANCEL_DELTA >= future[0] > current_order.get('price', 0),
+            elif all((perpetual[0] - N_TX_ENTRY_GAP[max(gap_idx, current_order_idx)] + N_TX_ENTRY_GAP_CANCEL_DELTA >= future[0] > current_order.get('price', 0),
                       not if_price_changing,
                       current_order)):
                 self.logger.info('---- entry change price to: {} ----'.format(min(future[0] + 0.5, future[2] - 0.5)))
                 self.deribittdreq.send_string(json.dumps({
-                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
+                    'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'edit',
                     'params': {'order_id': current_order['order_id'],
-                               'amount': min(SIZE_PER_TRADE, perpetual[1]),
+                               'amount': min(N_SIZE_PER_TRADE, perpetual[1]),
                                'price': min(future[0] + 0.5, future[2] - 0.5),
                                'post_only': True, }
                 }))
                 self.deribittdreq.recv_string()
                 if_price_changing = True
             # cancel orders in this area
-            elif all((max(future[2] - perpetual[2], perpetual[0] - future[0]) < TX_ENTRY_GAP[max(gap_idx, current_order_idx)] - TX_ENTRY_GAP_CANCEL_DELTA,
-                      max(future[0] - perpetual[0], perpetual[2] - future[2]) > TX_EXIT_GAP_CANCEL,
+            elif all((max(future[2] - perpetual[2], perpetual[0] - future[0]) < N_TX_ENTRY_GAP[max(gap_idx, current_order_idx)] - N_TX_ENTRY_GAP_CANCEL_DELTA,
+                      max(future[0] - perpetual[0], perpetual[2] - future[2]) > N_TX_EXIT_GAP_CANCEL,
                       not can_place_order,
                       not if_order_cancelling,
                       current_order.get('order_state', '') not in ('filled', 'cancelled', ''))):
                 self.deribittdreq.send_string(json.dumps({
-                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'cancel', 'params': {'order_id': current_order['order_id']}
+                    'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'cancel', 'params': {'order_id': current_order['order_id']}
                 }))
                 self.deribittdreq.recv_string()
                 if_order_cancelling = True
                 current_order_idx = 0
             # future > perpetual exit point
-            elif future[0] - perpetual[0] <= TX_EXIT_GAP and future_size < 0 and can_exit and can_place_order:
+            elif future[0] - perpetual[0] <= N_TX_EXIT_GAP and future_size < 0 and can_exit and can_place_order:
                 self.logger.info(' **** exit order gap: {}'.format(future[0] - perpetual[0]))
                 self.deribittdreq.send_string(json.dumps({
-                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'buy',
+                    'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'buy',
                     'params': {'instrument_name': SEASON_FUTURE,
-                               'amount': min(SIZE_PER_TRADE, abs(future_size), perpetual[1]),
+                               'amount': min(N_SIZE_PER_TRADE, abs(future_size), perpetual[1]),
                                'type': 'limit',
                                'price': min(future[0] + 0.5, future[2] - 0.5),
                                'post_only': True, }
@@ -133,24 +133,24 @@ class FutureArbitrage(ServiceBase):
                 self.deribittdreq.recv_string()
                 can_place_order = False
             # future > perpetual exit point: change limit order price
-            elif current_order.get('price', 999999) < future[0] <= perpetual[0] + TX_EXIT_GAP_CANCEL and not if_price_changing:
+            elif current_order.get('price', 999999) < future[0] <= perpetual[0] + N_TX_EXIT_GAP_CANCEL and not if_price_changing:
                 self.logger.info('---- exit change price to: {} ----'.format(min(future[0] + 0.5, future[2] - 0.5)))
                 self.deribittdreq.send_string(json.dumps({
-                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
+                    'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'edit',
                     'params': {'order_id': current_order['order_id'],
-                               'amount': min(SIZE_PER_TRADE, abs(future_size), perpetual[1]),
+                               'amount': min(N_SIZE_PER_TRADE, abs(future_size), perpetual[1]),
                                'price': min(future[0] + 0.5, future[2] - 0.5),
                                'post_only': True, }
                 }))
                 self.deribittdreq.recv_string()
                 if_price_changing = True
             # perpetual > future exit point
-            elif perpetual[2] - future[2] <= TX_EXIT_GAP and future_size > 0 and can_exit and can_place_order:
+            elif perpetual[2] - future[2] <= N_TX_EXIT_GAP and future_size > 0 and can_exit and can_place_order:
                 self.logger.info(' **** exit order gap: {}'.format(perpetual[2] - future[2]))
                 self.deribittdreq.send_string(json.dumps({
-                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'sell',
+                    'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'sell',
                     'params': {'instrument_name': SEASON_FUTURE,
-                               'amount': min(SIZE_PER_TRADE, abs(future_size), perpetual[3]),
+                               'amount': min(N_SIZE_PER_TRADE, abs(future_size), perpetual[3]),
                                'type': 'limit',
                                'price': max(future[0] + 0.5, future[2] - 0.5),
                                'post_only': True, }
@@ -158,12 +158,12 @@ class FutureArbitrage(ServiceBase):
                 self.deribittdreq.recv_string()
                 can_place_order = False
             # perpetual > future exit point: change limit order price
-            elif current_order.get('price', 0) > future[2] >= perpetual[2] - TX_EXIT_GAP_CANCEL and not if_price_changing:
+            elif current_order.get('price', 0) > future[2] >= perpetual[2] - N_TX_EXIT_GAP_CANCEL and not if_price_changing:
                 self.logger.info('---- exit change price to: {} ----'.format(max(future[0] + 0.5, future[2] - 0.5)))
                 self.deribittdreq.send_string(json.dumps({
-                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
+                    'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'edit',
                     'params': {'order_id': current_order['order_id'],
-                               'amount': min(SIZE_PER_TRADE, abs(future_size), perpetual[3]),
+                               'amount': min(N_SIZE_PER_TRADE, abs(future_size), perpetual[3]),
                                'price': max(future[0] + 0.5, future[2] - 0.5),
                                'post_only': True, }
                 }))
@@ -207,7 +207,7 @@ class FutureArbitrage(ServiceBase):
                 else:
                     self.logger.info('cant receive msg from future md')
                     self.deribittdreq.send_string(json.dumps({
-                        'accountid': DERIBIT_ACCOUNT_ID, 'method': 'cancel_all', 'params': {}
+                        'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'cancel_all', 'params': {}
                     }))
                     self.deribittdreq.recv_string()
                     if_order_cancelling = True
@@ -222,7 +222,7 @@ class FutureArbitrage(ServiceBase):
             
             while self.state == ServiceState.started:
                 msg = json.loads(await self.deribittd.recv_string())
-                if msg['accountid'] != DERIBIT_ACCOUNT_ID:
+                if msg['accountid'] != N_DERIBIT_ACCOUNT_ID:
                     continue
                 
                 if msg['type'] == 'positions':
@@ -232,7 +232,7 @@ class FutureArbitrage(ServiceBase):
                             future_size = d['size']
                         elif d['instrument_name'] == 'BTC-PERPETUAL':
                             perpetual_size = d['size']
-                    if abs(future_size + perpetual_size) > SIZE_PER_TRADE and can_place_order:
+                    if abs(future_size + perpetual_size) > N_SIZE_PER_TRADE and can_place_order:
                         instrument_name, method = '', ''
                         if future_size < 0 and future_size + perpetual_size > 0:
                             instrument_name, method = 'BTC-PERPETUAL', 'sell'
@@ -244,9 +244,9 @@ class FutureArbitrage(ServiceBase):
                             instrument_name, method = 'BTC-PERPETUAL', 'buy'
                         if instrument_name and method:
                             self.deribittdreq.send_string(json.dumps({
-                                'accountid': DERIBIT_ACCOUNT_ID, 'method': method,
+                                'accountid': N_DERIBIT_ACCOUNT_ID, 'method': method,
                                 'params': {'instrument_name': instrument_name,
-                                           'amount': abs(future_size + perpetual_size) - SIZE_PER_TRADE,
+                                           'amount': abs(future_size + perpetual_size) - N_SIZE_PER_TRADE,
                                            'type': 'market',}
                             }))
                             self.deribittdreq.recv_string()
@@ -259,7 +259,7 @@ class FutureArbitrage(ServiceBase):
                         elif data['order']['instrument_name'] == 'BTC-PERPETUAL':
                             if current_order:
                                 self.deribittdreq.send_string(json.dumps({
-                                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'get_order_state',
+                                    'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'get_order_state',
                                     'params': {'order_id': current_order['order_id']}
                                 }))
                                 self.deribittdreq.recv_string()
@@ -280,7 +280,7 @@ class FutureArbitrage(ServiceBase):
                 elif msg['type'] == 'open_orders':
                     if sum([1 if (i['instrument_name'] == SEASON_FUTURE and i['order_type'] == 'limit') else 0 for i in msg['data']]) > 1:
                         self.deribittdreq.send_string(json.dumps({
-                            'accountid': DERIBIT_ACCOUNT_ID, 'method': 'cancel_all', 'params': {}
+                            'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'cancel_all', 'params': {}
                         }))
                         self.deribittdreq.recv_string()
                         if_order_cancelling = True
@@ -303,7 +303,7 @@ class FutureArbitrage(ServiceBase):
                         if changes['trades']:
                             future_filled = sum([tx['amount'] if tx['order_type'] == 'limit' else 0 for tx in changes['trades']])
                             self.deribittdreq.send_string(json.dumps({
-                                'accountid': DERIBIT_ACCOUNT_ID, 'method': 'buy' if changes['trades'][0]['direction'] == 'sell' else 'sell',
+                                'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'buy' if changes['trades'][0]['direction'] == 'sell' else 'sell',
                                 'params': {'instrument_name': 'BTC-PERPETUAL', 'amount': future_filled, 'type': 'market',}
                             }))
                             self.deribittdreq.recv_string()
@@ -331,7 +331,7 @@ class FutureArbitrage(ServiceBase):
             while self.state == ServiceState.started:
                 if current_order.get('order_state', '') not in ('filled', 'cancelled', ''):
                     self.deribittdreq.send_string(json.dumps({
-                        'accountid': DERIBIT_ACCOUNT_ID, 'method': 'get_order_state',
+                        'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'get_order_state',
                         'params': {'order_id': current_order['order_id']}
                     }))
                     self.deribittdreq.recv_string()
@@ -345,13 +345,13 @@ class FutureArbitrage(ServiceBase):
             while self.state == ServiceState.started:
                 '''
                 self.deribittdreq.send_string(json.dumps({
-                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'get_positions',
+                    'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'get_positions',
                     'params': {'currency': 'BTC', 'kind': 'future'}
                 }))
                 self.deribittdreq.recv_string()
                 '''
                 self.deribittdreq.send_string(json.dumps({
-                    'accountid': DERIBIT_ACCOUNT_ID, 'method': 'get_open_orders_by_currency',
+                    'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'get_open_orders_by_currency',
                     'params': {'currency': 'BTC', 'kind': 'future'}
                 }))
                 self.deribittdreq.recv_string()
