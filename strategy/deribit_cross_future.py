@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 
-from crypto_trading.service.base import ServiceState, ServiceBase, start_service
-from crypto_trading.config import *
 import zmq.asyncio
 import asyncio
 import json
 import time
+from crypto_trading.service.base import ServiceState, ServiceBase, start_service
+from crypto_trading.config import *
 
+
+PERPETUAL = 'BTC-26JUN20'
+N_QUARTERLY_FUTURE = 'BTC-25SEP20'
 
 # margin: [equity, initial_margin, maintenance_margin]
 margin = [0, 0, 0]
@@ -14,19 +17,6 @@ future = None
 future_size = 0
 perpetual = None
 perpetual_size = 0
-funding = 0
-
-
-def get_expiration(sym):
-    ex = sym.split('-')[1]
-    return ex.replace(ex[2:5],
-                      {'JAN': '01', 'FEB': '02', 'MAR': '03',
-                       'APR': '04', 'MAY': '05', 'JUN': '06',
-                       'JUL': '07', 'AUG': '08', 'SEP': '09',
-                       'OCT': '10', 'NOV': '11', 'DEC': '12'}[ex[2:5]])
-
-
-expiration = time.mktime(time.strptime(get_expiration(N_QUARTERLY_FUTURE), '%d%m%y')) + 3600*8
 
 
 class OrderState():
@@ -81,24 +71,10 @@ class FutureArbitrage(ServiceBase):
     async def find_quotes_gap(self):
         try:
             global future, future_size, f_limit_order, perpetual, perpetual_size, p_limit_order, margin
-            global funding
-            min_left = (expiration - time.time())/60
-            premium = ((future.bid+future.ask)/2 - (perpetual.bid+perpetual.ask)/2) / future.index_price * (525600/min_left) * 100
-            pos_idx = sum([1 if max(abs(future_size), abs(perpetual_size)) >= i else 0 for i in N_POSITION_SIZE_THRESHOLD])
 
-            # future > perpetual situation
-            if any((all((min(future.bid-perpetual.bid, future.ask-perpetual.ask) >= N_TX_ENTRY_PRICE_GAP/100*future.index_price,
-                         premium >= max(N_TX_ENTRY_GAP[min(pos_idx, len(N_TX_ENTRY_GAP)-1)], funding * 3 * 365),
-                         max(abs(future_size), abs(perpetual_size)) < N_POSITION_SIZE_THRESHOLD[-1],
-                         margin[1] < margin[0],
-                         margin[2] < margin[0] * N_MARGIN_THRESHOLD[0])),
-                    # or close position when gap disppears (or margin reaches close threshold)
-                    # in case of longing future and shorting perpetual
-                    all((premium >= - N_TX_EXIT_GAP or margin[2] >= margin[0] * N_MARGIN_THRESHOLD[1],
-                         future_size > 0,
-                         perpetual_size < 0)), )):
+            if all((min(future.bid - perpetual.bid, future.ask - perpetual.ask) >= 150,
+                    max(future_size, perpetual_size) < 100000)):
                 if not f_limit_order.if_placed:
-                    self.logger.info('**** premium: {}, trigger future sell limit order ****'.format(premium))
                     await self.deribittdreq.send_string(json.dumps({
                         'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'sell',
                         'params': {'instrument_name': N_QUARTERLY_FUTURE,
@@ -128,7 +104,6 @@ class FutureArbitrage(ServiceBase):
                         else:
                             f_limit_order.reset()
                 if not p_limit_order.if_placed:
-                    self.logger.info('**** premium: {}, trigger perpetual buy limit order ****'.format(premium))
                     await self.deribittdreq.send_string(json.dumps({
                         'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'buy',
                         'params': {'instrument_name': PERPETUAL,
@@ -158,18 +133,8 @@ class FutureArbitrage(ServiceBase):
                         else:
                             p_limit_order.reset()
             # perpetual > future situation
-            elif any((all((min(perpetual.bid-future.bid, perpetual.ask-future.ask) >= N_TX_ENTRY_PRICE_GAP/100*future.index_price,
-                           premium <= min(- N_TX_ENTRY_GAP[min(pos_idx, len(N_TX_ENTRY_GAP)-1)], funding * 3 * 365),
-                           max(abs(future_size), abs(perpetual_size)) < N_POSITION_SIZE_THRESHOLD[-1],
-                           margin[1] < margin[0],
-                           margin[2] < margin[0] * N_MARGIN_THRESHOLD[0])),
-                      # or close position when gap disppears (or margin reaches close threshold)
-                      # in case of shorting future and longing perpetual
-                      all((premium <= N_TX_EXIT_GAP or margin[2] >= margin[0] * N_MARGIN_THRESHOLD[1],
-                           future_size < 0,
-                           perpetual_size > 0)), )):
+            elif max(future.bid - perpetual.bid, future.ask - perpetual.ask) <= 100:
                 if not f_limit_order.if_placed:
-                    self.logger.info('**** premium: {}, future buy limit order ****'.format(premium))
                     await self.deribittdreq.send_string(json.dumps({
                         'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'buy',
                         'params': {'instrument_name': N_QUARTERLY_FUTURE,
@@ -199,7 +164,6 @@ class FutureArbitrage(ServiceBase):
                         else:
                             f_limit_order.reset()
                 if not p_limit_order.if_placed:
-                    self.logger.info('**** premium: {}, perpetual sell limit order ****'.format(premium))
                     await self.deribittdreq.send_string(json.dumps({
                         'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'sell',
                         'params': {'instrument_name': PERPETUAL,
@@ -246,7 +210,6 @@ class FutureArbitrage(ServiceBase):
     async def process_msg(self):
         try:
             global future, future_size, perpetual, perpetual_size, margin, f_limit_order, p_limit_order
-            global funding
             while self.state == ServiceState.started:
                 msg = await self.msg.get()
                 if msg['type'] not in ('quote', 'user.portfolio', 'buy', 'sell', 'edit'):
@@ -262,8 +225,6 @@ class FutureArbitrage(ServiceBase):
                     d = msg['data']
                     if d['instrument_name'] == PERPETUAL:
                         perpetual = Quote(d['best_bid_price'], d['best_bid_amount'], d['best_ask_price'], d['best_ask_amount'], d['index_price'])
-                        premium = (d['mark_price'] - d['index_price']) / d['index_price'] * 100
-                        funding = max(0.05, premium) + min(-0.05, premium)
                     elif d['instrument_name'] == N_QUARTERLY_FUTURE:
                         future = Quote(d['best_bid_price'], d['best_bid_amount'], d['best_ask_price'], d['best_ask_amount'], d['index_price'])
                     await self.find_quotes_gap()
@@ -403,5 +364,5 @@ class FutureArbitrage(ServiceBase):
 
 
 if __name__ == '__main__':
-    service = FutureArbitrage('n-future-arb')
+    service = FutureArbitrage('cross-future')
     start_service(service, {})

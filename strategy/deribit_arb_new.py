@@ -391,6 +391,9 @@ class FutureArbitrage(ServiceBase):
             self.logger.exception(e)
             await self.balance_positions()
 
+    async def check_funding(self):
+        pass
+
     async def run(self):
         if self.state == ServiceState.started:
             self.logger.error('tried to run service, but state is %s' % self.state)
