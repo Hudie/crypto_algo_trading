@@ -9,6 +9,9 @@ import time
 import aiohttp
 
 
+DAY_FUNDING_NO_OPEN = 0.0003
+DAY_FUNDING_CLOSE = 0.0005
+
 # margin: [equity, initial_margin, maintenance_margin]
 margin = [0, 0, 0]
 future = None
@@ -93,10 +96,10 @@ class FutureArbitrage(ServiceBase):
                          premium >= max(N_TX_ENTRY_GAP[min(pos_idx, len(N_TX_ENTRY_GAP)-1)], funding * 3 * 365),
                          margin[1]/margin[0] < min(N_POSITION_SIZE_THRESHOLD[-1], 1),
                          margin[2] < margin[0] * N_MARGIN_THRESHOLD[0],
-                         abs(day_funding) < 0.00005)),
+                         abs(day_funding) < DAY_FUNDING_NO_OPEN)),
                     # or close position when gap disppears (or margin reaches close threshold)
                     # in case of longing future and shorting perpetual
-                    all((premium >= - N_TX_EXIT_GAP or margin[2] >= margin[0] * N_MARGIN_THRESHOLD[1] or abs(day_funding) >= 0.0002,
+                    all((premium >= - N_TX_EXIT_GAP or margin[2] >= margin[0] * N_MARGIN_THRESHOLD[1] or abs(day_funding) >= DAY_FUNDING_CLOSE,
                          future_size > 0,
                          perpetual_size < 0)), )):
                 if not f_limit_order.if_placed:
@@ -164,10 +167,10 @@ class FutureArbitrage(ServiceBase):
                            premium <= min(- N_TX_ENTRY_GAP[min(pos_idx, len(N_TX_ENTRY_GAP)-1)], funding * 3 * 365),
                            margin[1]/margin[0] < min(N_POSITION_SIZE_THRESHOLD[-1], 1),
                            margin[2] < margin[0] * N_MARGIN_THRESHOLD[0],
-                           abs(day_funding) < 0.00005)),
+                           abs(day_funding) < DAY_FUNDING_NO_OPEN)),
                       # or close position when gap disppears (or margin reaches close threshold)
                       # in case of shorting future and longing perpetual
-                      all((premium <= N_TX_EXIT_GAP or margin[2] >= margin[0] * N_MARGIN_THRESHOLD[1] or abs(day_funding) >= 0.0002,
+                      all((premium <= N_TX_EXIT_GAP or margin[2] >= margin[0] * N_MARGIN_THRESHOLD[1] or abs(day_funding) >= DAY_FUNDING_CLOSE,
                            future_size < 0,
                            perpetual_size > 0)), )):
                 if not f_limit_order.if_placed:
@@ -400,7 +403,7 @@ class FutureArbitrage(ServiceBase):
             async with aiohttp.ClientSession() as session:
                 while self.state == ServiceState.started:
                     now = int(time.time() * 1000)
-                    res = await session.get(funding_url.format(PERPETUAL, now - 8 * 3600 * 1000, now))
+                    res = await session.get(funding_url.format(PERPETUAL, now - 24 * 3600 * 1000, now))
                     day_funding = sum([f['interest_1h'] for f in json.loads(await res.content.read())['result']])
                     await asyncio.sleep(60)
         except Exception as e:
