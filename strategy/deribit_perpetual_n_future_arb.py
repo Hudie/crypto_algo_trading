@@ -6,6 +6,7 @@ import zmq.asyncio
 import asyncio
 import json
 import time
+import aiohttp
 
 
 # margin: [equity, initial_margin, maintenance_margin]
@@ -15,6 +16,7 @@ future_size = 0
 perpetual = None
 perpetual_size = 0
 funding = 0
+day_funding = 0
 
 
 def get_expiration(sym):
@@ -81,20 +83,20 @@ class FutureArbitrage(ServiceBase):
     async def find_quotes_gap(self):
         try:
             global future, future_size, f_limit_order, perpetual, perpetual_size, p_limit_order, margin
-            global funding
+            global funding, day_funding
             min_left = (expiration - time.time())/60
             premium = ((future.bid+future.ask)/2 - (perpetual.bid+perpetual.ask)/2) / future.index_price * (525600/min_left) * 100
-            pos_idx = sum([1 if max(abs(future_size), abs(perpetual_size)) >= i else 0 for i in N_POSITION_SIZE_THRESHOLD])
+            pos_idx = sum([1 if margin[1]/margin[0] >= i else 0 for i in N_POSITION_SIZE_THRESHOLD])
 
             # future > perpetual situation
             if any((all((min(future.bid-perpetual.bid, future.ask-perpetual.ask) >= N_TX_ENTRY_PRICE_GAP/100*future.index_price,
                          premium >= max(N_TX_ENTRY_GAP[min(pos_idx, len(N_TX_ENTRY_GAP)-1)], funding * 3 * 365),
-                         max(abs(future_size), abs(perpetual_size)) < N_POSITION_SIZE_THRESHOLD[-1],
-                         margin[1] < margin[0],
-                         margin[2] < margin[0] * N_MARGIN_THRESHOLD[0])),
+                         margin[1]/margin[0] < min(N_POSITION_SIZE_THRESHOLD[-1], 1),
+                         margin[2] < margin[0] * N_MARGIN_THRESHOLD[0],
+                         abs(day_funding) < 0.00005)),
                     # or close position when gap disppears (or margin reaches close threshold)
                     # in case of longing future and shorting perpetual
-                    all((premium >= - N_TX_EXIT_GAP or margin[2] >= margin[0] * N_MARGIN_THRESHOLD[1],
+                    all((premium >= - N_TX_EXIT_GAP or margin[2] >= margin[0] * N_MARGIN_THRESHOLD[1] or abs(day_funding) >= 0.0002,
                          future_size > 0,
                          perpetual_size < 0)), )):
                 if not f_limit_order.if_placed:
@@ -160,12 +162,12 @@ class FutureArbitrage(ServiceBase):
             # perpetual > future situation
             elif any((all((min(perpetual.bid-future.bid, perpetual.ask-future.ask) >= N_TX_ENTRY_PRICE_GAP/100*future.index_price,
                            premium <= min(- N_TX_ENTRY_GAP[min(pos_idx, len(N_TX_ENTRY_GAP)-1)], funding * 3 * 365),
-                           max(abs(future_size), abs(perpetual_size)) < N_POSITION_SIZE_THRESHOLD[-1],
-                           margin[1] < margin[0],
-                           margin[2] < margin[0] * N_MARGIN_THRESHOLD[0])),
+                           margin[1]/margin[0] < min(N_POSITION_SIZE_THRESHOLD[-1], 1),
+                           margin[2] < margin[0] * N_MARGIN_THRESHOLD[0],
+                           abs(day_funding) < 0.00005)),
                       # or close position when gap disppears (or margin reaches close threshold)
                       # in case of shorting future and longing perpetual
-                      all((premium <= N_TX_EXIT_GAP or margin[2] >= margin[0] * N_MARGIN_THRESHOLD[1],
+                      all((premium <= N_TX_EXIT_GAP or margin[2] >= margin[0] * N_MARGIN_THRESHOLD[1] or abs(day_funding) >= 0.0002,
                            future_size < 0,
                            perpetual_size > 0)), )):
                 if not f_limit_order.if_placed:
@@ -391,6 +393,20 @@ class FutureArbitrage(ServiceBase):
             self.logger.exception(e)
             await self.balance_positions()
 
+    async def check_funding(self):
+        try:
+            global day_funding
+            funding_url = 'https://www.deribit.com/api/v2/public/get_funding_rate_history?instrument_name={}&start_timestamp={}&end_timestamp={}'
+            async with aiohttp.ClientSession() as session:
+                while self.state == ServiceState.started:
+                    now = int(time.time() * 1000)
+                    res = await session.get(funding_url.format(PERPETUAL, now - 8 * 3600 * 1000, now))
+                    day_funding = sum([f['interest_1h'] for f in json.loads(await res.content.read())['result']])
+                    await asyncio.sleep(60)
+        except Exception as e:
+            self.logger.exception(e)
+            await self.check_funding()
+
     async def run(self):
         if self.state == ServiceState.started:
             self.logger.error('tried to run service, but state is %s' % self.state)
@@ -400,6 +416,7 @@ class FutureArbitrage(ServiceBase):
             asyncio.ensure_future(self.sub_msg_md())
             asyncio.ensure_future(self.sub_msg_td())
             asyncio.ensure_future(self.balance_positions())
+            asyncio.ensure_future(self.check_funding())
 
 
 if __name__ == '__main__':

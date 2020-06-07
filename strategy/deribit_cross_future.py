@@ -10,6 +10,9 @@ from crypto_trading.config import *
 
 PERPETUAL = 'BTC-26JUN20'
 N_QUARTERLY_FUTURE = 'BTC-25SEP20'
+TX_ENTRY_GAP = [137, 150, 165, 182, 200, 220, 245]
+TX_EXIT_GAP = 100
+POSITION_SIZE_THRESHOLD = [150000 * i for i in [1, 2, 3, 4, 5, 6, 7]]
 
 # margin: [equity, initial_margin, maintenance_margin]
 margin = [0, 0, 0]
@@ -71,9 +74,11 @@ class FutureArbitrage(ServiceBase):
     async def find_quotes_gap(self):
         try:
             global future, future_size, f_limit_order, perpetual, perpetual_size, p_limit_order, margin
+            pos_idx = sum([1 if max(abs(future_size), abs(perpetual_size)) >= i else 0 for i in POSITION_SIZE_THRESHOLD])
+            pos_idx = min(pos_idx, len(POSITION_SIZE_THRESHOLD) - 1)
 
-            if all((min(future.bid - perpetual.bid, future.ask - perpetual.ask) >= 150,
-                    max(future_size, perpetual_size) < 100000)):
+            if all((min(future.bid - perpetual.bid, future.ask - perpetual.ask) >= TX_ENTRY_GAP[pos_idx],
+                    max(abs(future_size), abs(perpetual_size)) < POSITION_SIZE_THRESHOLD[pos_idx])):
                 if not f_limit_order.if_placed:
                     await self.deribittdreq.send_string(json.dumps({
                         'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'sell',
@@ -133,7 +138,8 @@ class FutureArbitrage(ServiceBase):
                         else:
                             p_limit_order.reset()
             # perpetual > future situation
-            elif max(future.bid - perpetual.bid, future.ask - perpetual.ask) <= 100:
+            elif all((max(future.bid - perpetual.bid, future.ask - perpetual.ask) <= TX_EXIT_GAP,
+                      future_size < 0 and perpetual_size > 0)):
                 if not f_limit_order.if_placed:
                     await self.deribittdreq.send_string(json.dumps({
                         'accountid': N_DERIBIT_ACCOUNT_ID, 'method': 'buy',
