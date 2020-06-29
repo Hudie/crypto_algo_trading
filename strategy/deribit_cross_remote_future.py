@@ -7,17 +7,19 @@ from crypto_trading.service.base import ServiceState, ServiceBase, start_service
 # from crypto_trading.config import *
 
 
-DERIBIT_ACCOUNT_ID = 'mogu1988'
+DERIBIT_ACCOUNT_ID = 'maxlu'
 
 SYMBOL = 'BTC'
 MINIMUM_TICK_SIZE = 0.5
-NEAR_FUTURE = 'BTC-25SEP20'
-FAR_FUTURE = 'BTC-25DEC20'
-LONG_GAP = [137, 150, 165, 182, 200, 220, 245]
-LONG_POSITION_SIZE_THRESHOLD = [200000 * i for i in [1, 2, 3, 4, 5, 6, 7]]
-SHORT_GAP = [60, 50, 30, 0, -40, -90, -150, -220]
-SHORT_POSITION_SIZE_THRESHOLD = [200000 * i for i in [0.25, 1, 2, 3, 4, 5, 6, 7]]
-SIZE_PER_TRADE = 900
+# NEAR_FUTURE = 'BTC-25SEP20'
+NEAR_FUTURE = 'BTC-PERPETUAL'
+# FAR_FUTURE = 'BTC-26MAR21'
+FAR_FUTURE = 'BTC-25SEP20'
+LONG_GAP = [80, 100, 130, 170, 220, 280]
+LONG_POSITION_SIZE_THRESHOLD = [150000 * i for i in [1, 2, 3, 4, 5, 6]]
+SHORT_GAP = [30, 10, -20, -60, -110, -170]
+SHORT_POSITION_SIZE_THRESHOLD = [150000 * i for i in [1, 2, 3, 4, 5, 6]]
+SIZE_PER_TRADE = 990
 
 
 # margin: [equity, initial_margin, maintenance_margin]
@@ -380,5 +382,5 @@ class FutureArbitrage(ServiceBase):
 
 
 if __name__ == '__main__':
-    service = FutureArbitrage('cross-future')
+    service = FutureArbitrage('cross-remote-future')
     start_service(service, {})
