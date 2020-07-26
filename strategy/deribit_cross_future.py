@@ -11,13 +11,14 @@ DERIBIT_ACCOUNT_ID = 'mogu1988'
 
 SYMBOL = 'BTC'
 MINIMUM_TICK_SIZE = 0.5
-NEAR_FUTURE = 'BTC-25SEP20'
-FAR_FUTURE = 'BTC-25DEC20'
-LONG_GAP = [137, 150, 165, 182, 200, 220, 245]
-LONG_POSITION_SIZE_THRESHOLD = [200000 * i for i in [1, 2, 3, 4, 5, 6, 7]]
-SHORT_GAP = [60, 50, 30, 0, -40, -90, -150, -220]
-SHORT_POSITION_SIZE_THRESHOLD = [200000 * i for i in [0.25, 1, 2, 3, 4, 5, 6, 7]]
-SIZE_PER_TRADE = 900
+NEAR_FUTURE = 'BTC-PERPETUAL'
+FAR_FUTURE = 'BTC-25SEP20'
+# LONG_GAP = [115, 127, 140, 154, 170, 187, 206]
+LONG_GAP = [1160, 1177, 1200, 1230, 1255]
+LONG_POSITION_SIZE_THRESHOLD = [10000 * i for i in [1, 2, 3, 4, 5]]
+SHORT_GAP = [245, 40, 30, 10, -20, -60, -110, -170]
+SHORT_POSITION_SIZE_THRESHOLD = [250000 * i for i in [0, 0.25, 1, 2, 3, 4, 5, 6]]
+SIZE_PER_TRADE = 1000
 
 
 # margin: [equity, initial_margin, maintenance_margin]
@@ -101,7 +102,9 @@ class FutureArbitrage(ServiceBase):
                     else:
                         if f_limit_order.order:
                             if not f_limit_order.order['order_state'] in ('filled', 'cancelled'):
-                                if future.ask < f_limit_order.order['price'] and not f_limit_order.if_changing:
+                                if all((any((future.ask < f_limit_order.order['price'],
+                                             perpetual.asksize < f_limit_order.order['amount'] - f_limit_order.order['filled_amount'])),
+                                        not f_limit_order.if_changing)):
                                     self.logger.info('**** change price to: {}, future sell limit order ****'.format(future.ask - MINIMUM_TICK_SIZE))
                                     await self.deribittdreq.send_string(json.dumps({
                                         'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
@@ -130,7 +133,9 @@ class FutureArbitrage(ServiceBase):
                     else:
                         if p_limit_order.order:
                             if not p_limit_order.order['order_state'] in ('filled', 'cancelled'):
-                                if perpetual.bid > p_limit_order.order['price'] and not p_limit_order.if_changing:
+                                if all((any((perpetual.bid > p_limit_order.order['price'],
+                                             future.bidsize < p_limit_order.order['amount'] - p_limit_order.order['filled_amount'])),
+                                        not p_limit_order.if_changing)):
                                     self.logger.info('**** change price to: {}, perpetual buy limit order ****'.format(perpetual.bid + MINIMUM_TICK_SIZE))
                                     await self.deribittdreq.send_string(json.dumps({
                                         'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
@@ -165,7 +170,9 @@ class FutureArbitrage(ServiceBase):
                     else:
                         if f_limit_order.order:
                             if not f_limit_order.order['order_state'] in ('filled', 'cancelled'):
-                                if future.bid > f_limit_order.order['price'] and not f_limit_order.if_changing:
+                                if all((any((future.bid > f_limit_order.order['price'],
+                                             perpetual.bidsize < f_limit_order.order['amount'] - f_limit_order.order['filled_amount'])),
+                                        not f_limit_order.if_changing)):
                                     self.logger.info('**** change price to: {}, future buy limit order ****'.format(future.bid + MINIMUM_TICK_SIZE))
                                     await self.deribittdreq.send_string(json.dumps({
                                         'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
@@ -194,7 +201,9 @@ class FutureArbitrage(ServiceBase):
                     else:
                         if p_limit_order.order:
                             if not p_limit_order.order['order_state'] in ('filled', 'cancelled'):
-                                if perpetual.ask < p_limit_order.order['price'] and not p_limit_order.if_changing:
+                                if all((any((perpetual.ask < p_limit_order.order['price'],
+                                             future.asksize < p_limit_order.order['amount'] - p_limit_order.order['filled_amount'])),
+                                        not p_limit_order.if_changing)):
                                     self.logger.info('**** change price to: {}, perpetual sell limit order ****'.format(perpetual.ask - MINIMUM_TICK_SIZE))
                                     await self.deribittdreq.send_string(json.dumps({
                                         'accountid': DERIBIT_ACCOUNT_ID, 'method': 'edit',
